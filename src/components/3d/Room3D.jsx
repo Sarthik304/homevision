@@ -46,12 +46,14 @@ export default function Room3D({ room, isSelected, onClick }) {
         <planeGeometry args={[width, height]} />
         <meshStandardMaterial color={floorColor} />
       </mesh>
+      
 
       {/* Ceiling */}
       <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[width, height]} />
         <meshStandardMaterial color="#f9f9f9" />
       </mesh>
+
 
       {/* Front wall */}
       <Wall
@@ -68,7 +70,7 @@ export default function Room3D({ room, isSelected, onClick }) {
         position={[0, WALL_HEIGHT / 2, -height / 2]}
         rotation={[0, Math.PI, 0]}
         size={[width, WALL_HEIGHT, WALL_THICKNESS]}
-        color={isSelected ? '#a8d8ea' : wallColor}
+        color={isSelected ? '#91a213ff' : wallColor}
         roomId={room.id}
         onClick={onClick}
       />
