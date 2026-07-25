@@ -60,7 +60,7 @@ export default function Room3D({ room, isSelected, onClick }) {
         position={[0, WALL_HEIGHT / 2, height / 2]}
         rotation={[0, 0, 0]}
         size={[width, WALL_HEIGHT, WALL_THICKNESS]}
-        color={isSelected ? '#a8d8ea' : wallColor}
+        color={isSelected ? '#4eb0d4ff' : wallColor}
         roomId={room.id}
         onClick={onClick}
       />

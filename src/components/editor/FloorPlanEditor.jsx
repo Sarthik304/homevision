@@ -77,7 +77,7 @@ export default function FloorPlanEditor() {
                   y={pixelH - 20}
                   align="center"
                   fontSize={10}
-                  fill="#888"
+                  fill="#888888ed"
                   fontFamily="Arial"
                 />
               </Group>
