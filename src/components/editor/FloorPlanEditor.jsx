@@ -2,17 +2,12 @@ import { Stage, Layer, Rect, Text, Group } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
 import { color, font } from '../../theme'
 
-// FloorPlanEditor is the top-down 2D view of your house.
-// Think of it like graph paper — rooms are rectangles you can see and click.
-// Konva makes it easy to draw interactive 2D shapes on a canvas.
-
-const SCALE = 20 // 1 metre = 20 pixels in the editor
-const PADDING = 40 // space around the edges
+const SCALE = 20
+const PADDING = 40
 
 export default function FloorPlanEditor() {
   const { rooms, selectedRoomId, selectRoom, updateRoom } = useHouseStore()
 
-  // Handle dragging a room to reposition it
   function handleDragEnd(e, roomId) {
     const newX = Math.round((e.target.x() - PADDING) / SCALE)
     const newY = Math.round((e.target.y() - PADDING) / SCALE)
@@ -49,7 +44,6 @@ export default function FloorPlanEditor() {
                 onDragEnd={(e) => handleDragEnd(e, room.id)}
                 onClick={() => selectRoom(room.id)}
               >
-                {/* Room rectangle */}
                 <Rect
                   width={pixelW}
                   height={pixelH}
@@ -58,9 +52,6 @@ export default function FloorPlanEditor() {
                   strokeWidth={isSelected ? 2.5 : 1.5}
                 />
 
-                {/* Room label.
-                    Konva draws to a canvas, so it can't inherit the page font —
-                    the family has to be passed in explicitly. */}
                 <Text
                   text={room.name}
                   width={pixelW}
@@ -73,7 +64,6 @@ export default function FloorPlanEditor() {
                   fontFamily={font}
                 />
 
-                {/* Dimension labels */}
                 <Text
                   text={`${room.width}m × ${room.height}m`}
                   width={pixelW}

@@ -1,6 +1,3 @@
-/* Global resets and the few things that can't be set from JS.
-   Colors here are mirrored from src/theme.js — keep them in sync. */
-
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -41,8 +38,6 @@ input:focus {
   border-radius: 3px;
 }
 
-/* react-colorful ships its own rounded look. Square it off so the picker
-   sits flush with the rest of the sidebar controls. */
 .react-colorful {
   height: 160px;
   border: 1px solid #dfdfdf;

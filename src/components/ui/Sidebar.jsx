@@ -3,12 +3,6 @@ import { useState } from 'react'
 import useHouseStore from '../../store/useHouseStore'
 import { color, radius } from '../../theme'
 
-// Sidebar shows room controls on the right side of the screen.
-// When a room is selected, you can change its wall color, floor color,
-// rename it, or delete it.
-
-// Shared styles for the small uppercase headers and the text inputs, so the
-// controls stay identical without repeating the same object four times.
 const sectionHeader = {
   fontSize: 11,
   fontWeight: 700,
@@ -46,7 +40,7 @@ export default function Sidebar() {
     removeRoom,
   } = useHouseStore()
 
-  const [colorTarget, setColorTarget] = useState(null) // 'wall' or 'floor'
+  const [colorTarget, setColorTarget] = useState(null)
   const [hoveredRoomId, setHoveredRoomId] = useState(null)
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
@@ -67,7 +61,6 @@ export default function Sidebar() {
         boxSizing: 'border-box',
       }}
     >
-      {/* Room list */}
       <div>
         <div style={{ ...sectionHeader, marginBottom: 10 }}>Rooms</div>
 
@@ -85,8 +78,6 @@ export default function Sidebar() {
               onMouseEnter={() => setHoveredRoomId(room.id)}
               onMouseLeave={() => setHoveredRoomId(null)}
               style={{
-                // The left border is always there so rows don't shift by 3px
-                // when they become selected — it's just transparent when not.
                 borderLeft: `3px solid ${isSelected ? color.brand : 'transparent'}`,
                 padding: '9px 12px',
                 borderRadius: radius.sm,
@@ -140,14 +131,12 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Selected room controls */}
       {selectedRoom && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ height: 1, background: color.border }} />
 
           <div style={sectionHeader}>Edit: {selectedRoom.name}</div>
 
-          {/* Room name */}
           <div>
             <label style={fieldLabel}>Room name</label>
             <input
@@ -157,7 +146,6 @@ export default function Sidebar() {
             />
           </div>
 
-          {/* Wall color */}
           <div>
             <label style={fieldLabel}>Wall colour</label>
             <div
@@ -185,7 +173,6 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* Floor color */}
           <div>
             <label style={fieldLabel}>Floor colour</label>
             <div
@@ -213,7 +200,6 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* Dimensions */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {['width', 'height'].map((dim) => (
               <div key={dim}>
@@ -234,7 +220,6 @@ export default function Sidebar() {
             ))}
           </div>
 
-          {/* Delete room */}
           <button
             onClick={() => removeRoom(selectedRoom.id)}
             style={{

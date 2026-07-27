@@ -1,9 +1,6 @@
 import useHouseStore from '../../store/useHouseStore'
 import { color, radius } from '../../theme'
 
-// Navbar sits at the top of the screen.
-// The most important thing it does is let you switch between 2D and 3D view.
-
 export default function Navbar() {
   const { activeView, setActiveView } = useHouseStore()
 
@@ -20,7 +17,6 @@ export default function Navbar() {
         flexShrink: 0,
       }}
     >
-      {/* App name */}
       <div
         style={{
           fontSize: 16,
@@ -33,7 +29,6 @@ export default function Navbar() {
         HomeVision
       </div>
 
-      {/* View toggle */}
       <div
         style={{
           display: 'flex',
@@ -52,7 +47,6 @@ export default function Navbar() {
               style={{
                 padding: '5px 16px',
                 borderRadius: radius.sm + 1,
-                // The active tab lifts out of the track as a white pill.
                 border: isActive ? `1px solid ${color.border}` : '1px solid transparent',
                 background: isActive ? color.bg : 'transparent',
                 color: isActive ? color.brand : color.muted,
@@ -68,7 +62,6 @@ export default function Navbar() {
         })}
       </div>
 
-      {/* Tip text */}
       <div style={{ fontSize: 12, color: color.muted, marginLeft: 'auto' }}>
         {activeView === '3d'
           ? 'Drag to rotate · Scroll to zoom · Right-click to pan'

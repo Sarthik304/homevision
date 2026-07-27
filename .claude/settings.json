@@ -6,7 +6,21 @@
       "Read(//tmp/**)",
       "Bash(find /Users/sarthikjena -maxdepth 4 -iname \"dino*.png\" 2>/dev/null)",
       "Read(//Users/sarthikjena/**)",
-      "Bash(kill 33533)"
+      "Bash(kill 33533)",
+      "Bash(kill 35004 34992)",
+      "Bash(xargs -I{} dirname {})",
+      "Bash(xargs -I{} basename {})",
+      "Bash(node -e ' *)",
+      "Bash(npm install *)",
+      "Bash(npx vite *)",
+      "Bash(cd /Users/sarthikjena/Desktop/homevision *)",
+      "Bash(node prune.js)",
+      "Bash(node prune.cjs)",
+      "Bash(pkill -f \"node.*vite\")",
+      "Bash(npm ci *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

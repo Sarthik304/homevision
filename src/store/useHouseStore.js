@@ -1,11 +1,6 @@
 import { create } from 'zustand'
 
-// This is your app's central data store.
-// Every room, wall, and setting lives here.
-// Any component can read from or update this store.
-
 const useHouseStore = create((set) => ({
-  // The list of rooms in your house
   rooms: [
     {
       id: 1,
@@ -29,13 +24,9 @@ const useHouseStore = create((set) => ({
     },
   ],
 
-  // Which room is currently selected
   selectedRoomId: null,
-
-  // Which view the user is in: '2d' or '3d'
   activeView: '3d',
 
-  // Actions — functions that update the store
   selectRoom: (id) => set({ selectedRoomId: id }),
 
   setActiveView: (view) => set({ activeView: view }),
