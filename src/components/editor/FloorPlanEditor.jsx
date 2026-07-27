@@ -1,5 +1,6 @@
 import { Stage, Layer, Rect, Text, Group } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
+import { color, font } from '../../theme'
 
 // FloorPlanEditor is the top-down 2D view of your house.
 // Think of it like graph paper — rooms are rectangles you can see and click.
@@ -23,7 +24,7 @@ export default function FloorPlanEditor() {
       style={{
         width: '100%',
         height: '100%',
-        background: '#f8f9fa',
+        background: color.workspace,
         overflow: 'auto',
         display: 'flex',
         alignItems: 'center',
@@ -53,12 +54,13 @@ export default function FloorPlanEditor() {
                   width={pixelW}
                   height={pixelH}
                   fill={room.wallColor}
-                  stroke={isSelected ? '#2563eb' : '#999'}
-                  strokeWidth={isSelected ? 3 : 1}
-                  cornerRadius={2}
+                  stroke={isSelected ? color.brand : color.muted}
+                  strokeWidth={isSelected ? 2.5 : 1.5}
                 />
 
-                {/* Room label */}
+                {/* Room label.
+                    Konva draws to a canvas, so it can't inherit the page font —
+                    the family has to be passed in explicitly. */}
                 <Text
                   text={room.name}
                   width={pixelW}
@@ -66,8 +68,9 @@ export default function FloorPlanEditor() {
                   align="center"
                   verticalAlign="middle"
                   fontSize={12}
-                  fill={isSelected ? '#2563eb' : '#333'}
-                  fontFamily="Arial"
+                  fontStyle={isSelected ? 'bold' : 'normal'}
+                  fill={isSelected ? color.brand : color.text}
+                  fontFamily={font}
                 />
 
                 {/* Dimension labels */}
@@ -77,8 +80,8 @@ export default function FloorPlanEditor() {
                   y={pixelH - 20}
                   align="center"
                   fontSize={10}
-                  fill="#888888ed"
-                  fontFamily="Arial"
+                  fill={color.muted}
+                  fontFamily={font}
                 />
               </Group>
             )
@@ -93,7 +96,7 @@ export default function FloorPlanEditor() {
           left: '50%',
           transform: 'translateX(-50%)',
           fontSize: 12,
-          color: '#999',
+          color: color.muted,
         }}
       >
         Click a room to select · Drag to reposition

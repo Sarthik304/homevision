@@ -4,6 +4,7 @@ import Sidebar from './components/ui/Sidebar'
 import HouseViewer from './components/3d/HouseViewer'
 import FloorPlanEditor from './components/editor/FloorPlanEditor'
 import useHouseStore from './store/useHouseStore'
+import { color } from './theme'
 
 // App is the root component — it decides the overall layout.
 // Think of it as the shell that holds everything together.
@@ -19,7 +20,7 @@ export default function App() {
         height: '100vh',
         display: 'flex',
         flexDirection: 'column',
-        background: '#0f0f1a',
+        background: color.workspace,
         overflow: 'hidden',
       }}
     >
@@ -40,7 +41,7 @@ export default function App() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#555',
+                    color: color.muted,
                     fontSize: 14,
                   }}
                 >

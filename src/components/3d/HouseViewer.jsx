@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Environment } from '@react-three/drei'
 import Room3D from './Room3D'
 import useHouseStore from '../../store/useHouseStore'
+import { color } from '../../theme'
 
 // HouseViewer is the full 3D canvas.
 // Canvas = the browser window into the 3D world.
@@ -22,6 +23,11 @@ export default function HouseViewer() {
         }}
         shadows
       >
+        {/* Scene background. Lowercase <color> is the three.js element, not the
+            token object imported above — it keeps the 3D void the same grey as
+            the 2D canvas so switching views doesn't flash. */}
+        <color attach="background" args={[color.workspace]} />
+
         {/* Lighting — without this everything would be pitch black */}
         <ambientLight intensity={0.5} />
         <directionalLight
@@ -37,8 +43,8 @@ export default function HouseViewer() {
         <Grid
           args={[100, 100]}
           position={[0, -0.01, 0]}
-          cellColor="#e0e0e0"
-          sectionColor="#cccccc"
+          cellColor={color.gridCell}
+          sectionColor={color.gridSection}
         />
 
         {/* Render every room */}

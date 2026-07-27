@@ -1,4 +1,5 @@
 import useHouseStore from '../../store/useHouseStore'
+import { color, radius } from '../../theme'
 
 // Navbar sits at the top of the screen.
 // The most important thing it does is let you switch between 2D and 3D view.
@@ -9,9 +10,9 @@ export default function Navbar() {
   return (
     <div
       style={{
-        height: 52,
-        background: '#13131f',
-        borderBottom: '1px solid #2a2a3e',
+        height: 56,
+        background: color.bg,
+        borderBottom: `1px solid ${color.border}`,
         display: 'flex',
         alignItems: 'center',
         padding: '0 20px',
@@ -20,7 +21,15 @@ export default function Navbar() {
       }}
     >
       {/* App name */}
-      <div style={{ fontSize: 16, fontWeight: 700, color: '#60a5fa', marginRight: 12 }}>
+      <div
+        style={{
+          fontSize: 16,
+          fontWeight: 700,
+          color: color.text,
+          letterSpacing: -0.2,
+          marginRight: 12,
+        }}
+      >
         HomeVision
       </div>
 
@@ -28,35 +37,39 @@ export default function Navbar() {
       <div
         style={{
           display: 'flex',
-          background: '#2a2a3e',
-          borderRadius: 8,
+          background: color.surface,
+          borderRadius: radius.md,
           padding: 3,
           gap: 2,
         }}
       >
-        {['2d', '3d'].map((view) => (
-          <button
-            key={view}
-            onClick={() => setActiveView(view)}
-            style={{
-              padding: '5px 16px',
-              borderRadius: 6,
-              border: 'none',
-              background: activeView === view ? '#2563eb' : 'transparent',
-              color: activeView === view ? '#fff' : '#888',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 500,
-              transition: 'all 0.15s',
-            }}
-          >
-            {view === '2d' ? '2D Plan' : '3D View'}
-          </button>
-        ))}
+        {['2d', '3d'].map((view) => {
+          const isActive = activeView === view
+          return (
+            <button
+              key={view}
+              onClick={() => setActiveView(view)}
+              style={{
+                padding: '5px 16px',
+                borderRadius: radius.sm + 1,
+                // The active tab lifts out of the track as a white pill.
+                border: isActive ? `1px solid ${color.border}` : '1px solid transparent',
+                background: isActive ? color.bg : 'transparent',
+                color: isActive ? color.brand : color.muted,
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: isActive ? 700 : 500,
+                transition: 'all 0.15s',
+              }}
+            >
+              {view === '2d' ? '2D Plan' : '3D View'}
+            </button>
+          )
+        })}
       </div>
 
       {/* Tip text */}
-      <div style={{ fontSize: 12, color: '#555', marginLeft: 'auto' }}>
+      <div style={{ fontSize: 12, color: color.muted, marginLeft: 'auto' }}>
         {activeView === '3d'
           ? 'Drag to rotate · Scroll to zoom · Right-click to pan'
           : 'Click a room to select · Drag to reposition'}
