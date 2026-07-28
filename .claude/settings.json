@@ -17,7 +17,13 @@
       "Bash(node prune.js)",
       "Bash(node prune.cjs)",
       "Bash(pkill -f \"node.*vite\")",
-      "Bash(npm ci *)"
+      "Bash(npm ci *)",
+      "Bash(npx oxlint *)",
+      "Bash(curl -sf http://localhost:5173)",
+      "Bash(break)",
+      "Bash(npx --yes playwright --version)",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(npx playwright *)"
     ],
     "additionalDirectories": [
       "/tmp"

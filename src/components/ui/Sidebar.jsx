@@ -29,6 +29,156 @@ const inputStyle = {
   boxSizing: 'border-box',
 }
 
+const secondaryButton = {
+  width: '100%',
+  padding: '9px',
+  background: color.bg,
+  border: `1px solid ${color.text}`,
+  borderRadius: radius.pill,
+  color: color.text,
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 700,
+}
+
+const WALL_LABELS = { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }
+const WALL_KEYS = ['top', 'bottom', 'left', 'right']
+
+function WallToggles({ room, toggleWall }) {
+  return (
+    <div>
+      <label style={fieldLabel}>Walls</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {WALL_KEYS.map((key) => {
+          const present = room.walls[key]
+          return (
+            <button
+              key={key}
+              onClick={() => toggleWall(room.id, key)}
+              style={{
+                padding: '7px 0',
+                borderRadius: radius.sm,
+                border: `1px solid ${present ? color.brand : color.border}`,
+                background: present ? color.brandTint : color.bg,
+                color: present ? color.brand : color.muted,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: present ? 700 : 500,
+              }}
+            >
+              {WALL_LABELS[key]} wall {present ? '✓' : ''}
+            </button>
+          )
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
+        Toggle a side to add or remove a wall wherever the floor is present.
+      </div>
+    </div>
+  )
+}
+
+function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight }) {
+  return (
+    <div>
+      <label style={fieldLabel}>{title}</label>
+
+      {availableWalls.length > 0 ? (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <select
+            value={wallChoice}
+            onChange={(e) => setWallChoice(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          >
+            {availableWalls.map((key) => (
+              <option key={key} value={key}>
+                {WALL_LABELS[key]} wall
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => onAdd(wallChoice)}
+            style={{
+              padding: '0 12px',
+              background: color.brand,
+              border: `1px solid ${color.brand}`,
+              borderRadius: radius.sm,
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            + Add
+          </button>
+        </div>
+      ) : (
+        <div style={{ fontSize: 11, color: color.muted }}>No walls to place one on.</div>
+      )}
+
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {items.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                background: color.surface,
+                borderRadius: radius.sm,
+                padding: '6px 8px',
+              }}
+            >
+              <span style={{ flex: 1, color: color.text }}>{WALL_LABELS[item.wall]}</span>
+              <span style={{ color: color.muted, fontSize: 11 }}>W</span>
+              <input
+                type="number"
+                value={item.width}
+                min={minWidth}
+                step={0.1}
+                onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
+                style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm }}
+              />
+              {minHeight != null && (
+                <>
+                  <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+                  <input
+                    type="number"
+                    value={item.height}
+                    min={minHeight}
+                    step={0.1}
+                    onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
+                    style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm }}
+                  />
+                </>
+              )}
+              <span style={{ color: color.muted }}>m</span>
+              <button
+                onClick={() => onRemove(item.id)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: color.danger,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: '2px 4px',
+                }}
+                aria-label={`Remove ${title.toLowerCase()}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar() {
   const {
     rooms,
@@ -37,13 +187,26 @@ export default function Sidebar() {
     updateRoomColor,
     updateRoom,
     addRoom,
+    addFloor,
     removeRoom,
+    toggleWall,
+    addDoor,
+    updateDoor,
+    removeDoor,
+    addWindow,
+    updateWindow,
+    removeWindow,
   } = useHouseStore()
 
   const [colorTarget, setColorTarget] = useState(null)
   const [hoveredRoomId, setHoveredRoomId] = useState(null)
+  const [doorWallChoice, setDoorWallChoice] = useState('top')
+  const [windowWallChoice, setWindowWallChoice] = useState('top')
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
+  const availableWalls = selectedRoom ? WALL_KEYS.filter((key) => selectedRoom.walls[key]) : []
+  const doorWall = availableWalls.includes(doorWallChoice) ? doorWallChoice : availableWalls[0]
+  const windowWall = availableWalls.includes(windowWallChoice) ? windowWallChoice : availableWalls[0]
 
   return (
     <div
@@ -112,23 +275,14 @@ export default function Sidebar() {
           )
         })}
 
-        <button
-          onClick={addRoom}
-          style={{
-            width: '100%',
-            padding: '9px',
-            marginTop: 12,
-            background: color.bg,
-            border: `1px solid ${color.text}`,
-            borderRadius: radius.pill,
-            color: color.text,
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          + Add room
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+          <button onClick={addRoom} style={secondaryButton}>
+            + Add room
+          </button>
+          <button onClick={addFloor} style={secondaryButton}>
+            + Add floor (no walls)
+          </button>
+        </div>
       </div>
 
       {selectedRoom && (
@@ -209,16 +363,45 @@ export default function Sidebar() {
                 <input
                   type="number"
                   value={selectedRoom[dim]}
-                  min={2}
-                  max={30}
+                  min={0.1}
+                  step={0.1}
                   onChange={(e) =>
-                    updateRoom(selectedRoom.id, { [dim]: parseFloat(e.target.value) || 2 })
+                    updateRoom(selectedRoom.id, { [dim]: parseFloat(e.target.value) || 0.1 })
                   }
                   style={inputStyle}
                 />
               </div>
             ))}
           </div>
+
+          <div style={{ height: 1, background: color.border }} />
+
+          <WallToggles room={selectedRoom} toggleWall={toggleWall} />
+
+          <OpeningList
+            title="Doorways"
+            items={selectedRoom.doors}
+            availableWalls={availableWalls}
+            onAdd={(wall) => addDoor(selectedRoom.id, wall)}
+            onUpdate={(id, updates) => updateDoor(selectedRoom.id, id, updates)}
+            onRemove={(id) => removeDoor(selectedRoom.id, id)}
+            wallChoice={doorWall}
+            setWallChoice={setDoorWallChoice}
+            minWidth={0.3}
+          />
+
+          <OpeningList
+            title="Windows"
+            items={selectedRoom.windows}
+            availableWalls={availableWalls}
+            onAdd={(wall) => addWindow(selectedRoom.id, wall)}
+            onUpdate={(id, updates) => updateWindow(selectedRoom.id, id, updates)}
+            onRemove={(id) => removeWindow(selectedRoom.id, id)}
+            wallChoice={windowWall}
+            setWallChoice={setWindowWallChoice}
+            minWidth={0.2}
+            minHeight={0.2}
+          />
 
           <button
             onClick={() => removeRoom(selectedRoom.id)}

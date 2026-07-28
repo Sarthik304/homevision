@@ -12,6 +12,8 @@ export const color = {
   ceiling: '#FAFAFA',
   gridCell: '#E8E8E8',
   gridSection: '#D4D4D4',
+  window: '#8ecae6',
+  glass: '#bfe3f0',
 }
 
 export const font =
