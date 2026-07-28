@@ -1,13 +1,19 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import Navbar from './components/ui/Navbar'
 import Sidebar from './components/ui/Sidebar'
 import HouseViewer from './components/3d/HouseViewer'
 import FloorPlanEditor from './components/editor/FloorPlanEditor'
 import useHouseStore from './store/useHouseStore'
-import { color } from './theme'
+import { getColors } from './theme'
 
 export default function App() {
-  const { activeView } = useHouseStore()
+  const { activeView, darkMode } = useHouseStore()
+  const color = getColors(darkMode)
+
+  useEffect(() => {
+    document.body.style.background = color.workspace
+    document.body.style.color = color.text
+  }, [color.workspace, color.text])
 
   return (
     <div

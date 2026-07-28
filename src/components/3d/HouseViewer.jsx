@@ -2,10 +2,11 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Environment } from '@react-three/drei'
 import Room3D from './Room3D'
 import useHouseStore from '../../store/useHouseStore'
-import { color } from '../../theme'
+import { getColors } from '../../theme'
 
 export default function HouseViewer() {
-  const { rooms, selectedRoomId, selectRoom } = useHouseStore()
+  const { rooms, selectedRoomId, selectRoom, darkMode } = useHouseStore()
+  const color = getColors(darkMode)
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
@@ -20,10 +21,10 @@ export default function HouseViewer() {
       >
         <color attach="background" args={[color.workspace]} />
 
-        <ambientLight intensity={0.5} />
+        <ambientLight intensity={darkMode ? 0.3 : 0.5} />
         <directionalLight
           position={[10, 20, 10]}
-          intensity={1}
+          intensity={darkMode ? 0.7 : 1}
           castShadow
         />
 

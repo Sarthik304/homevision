@@ -1,24 +1,24 @@
 import { HexColorPicker } from 'react-colorful'
 import { useState } from 'react'
 import useHouseStore from '../../store/useHouseStore'
-import { color, radius } from '../../theme'
+import { getColors, radius } from '../../theme'
 
-const sectionHeader = {
+const getSectionHeader = (color) => ({
   fontSize: 11,
   fontWeight: 700,
   color: color.muted,
   textTransform: 'uppercase',
   letterSpacing: 0.6,
-}
+})
 
-const fieldLabel = {
+const getFieldLabel = (color) => ({
   fontSize: 12,
   color: color.muted,
   display: 'block',
   marginBottom: 6,
-}
+})
 
-const inputStyle = {
+const getInputStyle = (color) => ({
   width: '100%',
   padding: '8px 10px',
   background: color.bg,
@@ -27,9 +27,9 @@ const inputStyle = {
   color: color.text,
   fontSize: 13,
   boxSizing: 'border-box',
-}
+})
 
-const secondaryButton = {
+const getSecondaryButton = (color) => ({
   width: '100%',
   padding: '9px',
   background: color.bg,
@@ -39,12 +39,13 @@ const secondaryButton = {
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 700,
-}
+})
 
 const WALL_LABELS = { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
 
-function WallToggles({ room, toggleWall }) {
+function WallToggles({ room, toggleWall, color }) {
+  const fieldLabel = getFieldLabel(color)
   return (
     <div>
       <label style={fieldLabel}>Walls</label>
@@ -78,7 +79,10 @@ function WallToggles({ room, toggleWall }) {
   )
 }
 
-function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight }) {
+function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight, showPosition, color }) {
+  const fieldLabel = getFieldLabel(color)
+  const inputStyle = getInputStyle(color)
+
   return (
     <div>
       <label style={fieldLabel}>{title}</label>
@@ -124,53 +128,71 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
               key={item.id}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 6,
+                flexDirection: 'column',
+                gap: 5,
                 fontSize: 12,
                 background: color.surface,
                 borderRadius: radius.sm,
                 padding: '6px 8px',
               }}
             >
-              <span style={{ flex: 1, color: color.text }}>{WALL_LABELS[item.wall]}</span>
-              <span style={{ color: color.muted, fontSize: 11 }}>W</span>
-              <input
-                type="number"
-                value={item.width}
-                min={minWidth}
-                step={0.1}
-                onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
-                style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm }}
-              />
-              {minHeight != null && (
-                <>
-                  <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ flex: 1, color: color.text }}>{WALL_LABELS[item.wall]}</span>
+                <span style={{ color: color.muted, fontSize: 11 }}>W</span>
+                <input
+                  type="number"
+                  value={item.width}
+                  min={minWidth}
+                  step={0.1}
+                  onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
+                  style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+                />
+                {minHeight != null && (
+                  <>
+                    <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+                    <input
+                      type="number"
+                      value={item.height}
+                      min={minHeight}
+                      step={0.1}
+                      onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
+                      style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+                    />
+                  </>
+                )}
+                <span style={{ color: color.muted }}>m</span>
+                <button
+                  onClick={() => onRemove(item.id)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: color.danger,
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    lineHeight: 1,
+                    padding: '2px 4px',
+                  }}
+                  aria-label={`Remove ${title.toLowerCase()}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              {showPosition && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: color.muted, fontSize: 10 }}>Left</span>
                   <input
-                    type="number"
-                    value={item.height}
-                    min={minHeight}
-                    step={0.1}
-                    onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
-                    style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm }}
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={item.offset}
+                    onChange={(e) => onUpdate(item.id, { offset: parseFloat(e.target.value) })}
+                    style={{ flex: 1, accentColor: color.brand }}
                   />
-                </>
+                  <span style={{ color: color.muted, fontSize: 10 }}>Right</span>
+                </div>
               )}
-              <span style={{ color: color.muted }}>m</span>
-              <button
-                onClick={() => onRemove(item.id)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: color.danger,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  lineHeight: 1,
-                  padding: '2px 4px',
-                }}
-                aria-label={`Remove ${title.toLowerCase()}`}
-              >
-                ×
-              </button>
             </div>
           ))}
         </div>
@@ -196,7 +218,14 @@ export default function Sidebar() {
     addWindow,
     updateWindow,
     removeWindow,
+    darkMode,
   } = useHouseStore()
+
+  const color = getColors(darkMode)
+  const sectionHeader = getSectionHeader(color)
+  const fieldLabel = getFieldLabel(color)
+  const inputStyle = getInputStyle(color)
+  const secondaryButton = getSecondaryButton(color)
 
   const [colorTarget, setColorTarget] = useState(null)
   const [hoveredRoomId, setHoveredRoomId] = useState(null)
@@ -376,7 +405,7 @@ export default function Sidebar() {
 
           <div style={{ height: 1, background: color.border }} />
 
-          <WallToggles room={selectedRoom} toggleWall={toggleWall} />
+          <WallToggles room={selectedRoom} toggleWall={toggleWall} color={color} />
 
           <OpeningList
             title="Doorways"
@@ -388,6 +417,8 @@ export default function Sidebar() {
             wallChoice={doorWall}
             setWallChoice={setDoorWallChoice}
             minWidth={0.3}
+            showPosition
+            color={color}
           />
 
           <OpeningList
@@ -401,6 +432,7 @@ export default function Sidebar() {
             setWallChoice={setWindowWallChoice}
             minWidth={0.2}
             minHeight={0.2}
+            color={color}
           />
 
           <button

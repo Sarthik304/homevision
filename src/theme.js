@@ -1,4 +1,4 @@
-export const color = {
+export const lightColors = {
   bg: '#FFFFFF',
   workspace: '#F7F7F7',
   surface: '#F5F5F5',
@@ -15,6 +15,31 @@ export const color = {
   window: '#8ecae6',
   glass: '#bfe3f0',
 }
+
+export const darkColors = {
+  bg: '#1B1B1F',
+  workspace: '#121214',
+  surface: '#26262B',
+  border: '#33333A',
+  borderInput: '#55555C',
+  text: '#F2F2F2',
+  muted: '#9A9AA2',
+  brand: '#4C9AE8',
+  brandTint: '#1E2A38',
+  danger: '#FF6B8B',
+  ceiling: '#2A2A30',
+  gridCell: '#26262B',
+  gridSection: '#38383F',
+  window: '#5fb4dd',
+  glass: '#3a5f70',
+}
+
+export function getColors(darkMode) {
+  return darkMode ? darkColors : lightColors
+}
+
+// Backwards-compatible default palette.
+export const color = lightColors
 
 export const font =
   "'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"

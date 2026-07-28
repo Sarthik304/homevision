@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Edges } from '@react-three/drei'
-import { color as palette } from '../../theme'
+import useHouseStore from '../../store/useHouseStore'
+import { getColors } from '../../theme'
 
 const WALL_HEIGHT = 3
 const WALL_THICKNESS = 0.1
@@ -81,7 +82,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-function WallWithOpenings({ length, position, rotation, color, roomId, onClick, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, color, glassColor, roomId, onClick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(() => buildSolidSegments(length, openings), [length, openings])
   const windowOpenings = openings.filter((o) => o.type === 'window')
@@ -111,7 +112,7 @@ function WallWithOpenings({ length, position, rotation, color, roomId, onClick, 
           onClick={handleClick}
         >
           <boxGeometry args={[win.end - win.start, win.top - win.bottom, WALL_THICKNESS * 0.4]} />
-          <meshStandardMaterial color={palette.glass} transparent opacity={0.35} />
+          <meshStandardMaterial color={glassColor} transparent opacity={0.35} />
         </mesh>
       ))}
     </group>
@@ -119,6 +120,8 @@ function WallWithOpenings({ length, position, rotation, color, roomId, onClick, 
 }
 
 export default function Room3D({ room, isSelected, onClick }) {
+  const darkMode = useHouseStore((s) => s.darkMode)
+  const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
@@ -162,6 +165,7 @@ export default function Room3D({ room, isSelected, onClick }) {
             position={w.position}
             rotation={w.rotation}
             color={wallColor}
+            glassColor={palette.glass}
             roomId={room.id}
             onClick={onClick}
             doors={doors.filter((d) => d.wall === w.key)}

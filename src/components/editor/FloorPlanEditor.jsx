@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Text, Group, Line } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
-import { color, font, radius } from '../../theme'
+import { getColors, font, radius } from '../../theme'
 
 const SCALE = 20
 const PADDING = 40
@@ -11,6 +11,59 @@ const ZOOM_STEP = 1.15
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
+const SNAP_THRESHOLD = 0.6 // meters — how close an edge has to get before it snaps flush
+
+// Snaps a dragged room's proposed position (in meters) flush against any
+// other room it's close to, so adjacent rooms end up with zero gap between
+// them. Snapping on an axis only kicks in when the rooms actually overlap
+// along the other axis (so two rooms diagonal from each other don't snap).
+function getSnappedPosition(room, otherRooms, x, y) {
+  const w = room.width
+  const h = room.height
+  let snappedX = x
+  let snappedY = y
+  let xSnapped = false
+  let ySnapped = false
+  let bestXDist = SNAP_THRESHOLD
+  let bestYDist = SNAP_THRESHOLD
+
+  otherRooms.forEach((other) => {
+    const verticalOverlap = y < other.y + other.height && y + h > other.y
+    const horizontalOverlap = x < other.x + other.width && x + w > other.x
+
+    if (verticalOverlap) {
+      const distRightToLeft = Math.abs(x + w - other.x)
+      if (distRightToLeft < bestXDist) {
+        bestXDist = distRightToLeft
+        snappedX = other.x - w
+        xSnapped = true
+      }
+      const distLeftToRight = Math.abs(x - (other.x + other.width))
+      if (distLeftToRight < bestXDist) {
+        bestXDist = distLeftToRight
+        snappedX = other.x + other.width
+        xSnapped = true
+      }
+    }
+
+    if (horizontalOverlap) {
+      const distBottomToTop = Math.abs(y + h - other.y)
+      if (distBottomToTop < bestYDist) {
+        bestYDist = distBottomToTop
+        snappedY = other.y - h
+        ySnapped = true
+      }
+      const distTopToBottom = Math.abs(y - (other.y + other.height))
+      if (distTopToBottom < bestYDist) {
+        bestYDist = distTopToBottom
+        snappedY = other.y + other.height
+        ySnapped = true
+      }
+    }
+  })
+
+  return { x: snappedX, y: snappedY, xSnapped, ySnapped }
+}
 
 // Along a wall of pixel length `lengthPx`, cut out the door openings and
 // return the remaining solid stretches (as [start, end] pixel ranges).
@@ -33,7 +86,7 @@ function solidWallStretches(lengthPx, doors) {
   return solids
 }
 
-function RoomWalls({ room, pixelW, pixelH, isSelected }) {
+function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
   const windows = room.windows ?? []
@@ -99,7 +152,7 @@ function RoomWalls({ room, pixelW, pixelH, isSelected }) {
   })
 }
 
-function ZoomButton({ children, onClick, title }) {
+function ZoomButton({ children, onClick, title, color }) {
   return (
     <button
       onClick={onClick}
@@ -125,7 +178,8 @@ function ZoomButton({ children, onClick, title }) {
 }
 
 export default function FloorPlanEditor() {
-  const { rooms, selectedRoomId, selectRoom, updateRoom } = useHouseStore()
+  const { rooms, selectedRoomId, selectRoom, updateRoom, darkMode } = useHouseStore()
+  const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
   const [stageScale, setStageScale] = useState(1)
@@ -141,9 +195,26 @@ export default function FloorPlanEditor() {
     return () => observer.disconnect()
   }, [])
 
+  function handleDragMove(e, roomId) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return
+    const rawX = (e.target.x() - PADDING) / SCALE
+    const rawY = (e.target.y() - PADDING) / SCALE
+    const others = rooms.filter((r) => r.id !== roomId)
+    const snapped = getSnappedPosition(room, others, rawX, rawY)
+    e.target.x(snapped.x * SCALE + PADDING)
+    e.target.y(snapped.y * SCALE + PADDING)
+  }
+
   function handleDragEnd(e, roomId) {
-    const newX = Math.round((e.target.x() - PADDING) / SCALE)
-    const newY = Math.round((e.target.y() - PADDING) / SCALE)
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return
+    const rawX = (e.target.x() - PADDING) / SCALE
+    const rawY = (e.target.y() - PADDING) / SCALE
+    const others = rooms.filter((r) => r.id !== roomId)
+    const snapped = getSnappedPosition(room, others, rawX, rawY)
+    const newX = snapped.xSnapped ? snapped.x : Math.round(snapped.x)
+    const newY = snapped.ySnapped ? snapped.y : Math.round(snapped.y)
     updateRoom(roomId, { x: newX, y: newY })
   }
 
@@ -225,6 +296,7 @@ export default function FloorPlanEditor() {
                 x={pixelX}
                 y={pixelY}
                 draggable
+                onDragMove={(e) => handleDragMove(e, room.id)}
                 onDragEnd={(e) => handleDragEnd(e, room.id)}
                 onClick={() => selectRoom(room.id)}
               >
@@ -237,7 +309,7 @@ export default function FloorPlanEditor() {
                   dash={hasAnyWall ? undefined : [5, 4]}
                 />
 
-                <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} />
+                <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
 
                 <Text
                   text={room.name}
@@ -281,10 +353,10 @@ export default function FloorPlanEditor() {
           boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
         }}
       >
-        <ZoomButton title="Zoom in" onClick={() => zoomAtCenter(stageScale * ZOOM_STEP)}>
+        <ZoomButton title="Zoom in" onClick={() => zoomAtCenter(stageScale * ZOOM_STEP)} color={color}>
           +
         </ZoomButton>
-        <ZoomButton title="Zoom out" onClick={() => zoomAtCenter(stageScale / ZOOM_STEP)}>
+        <ZoomButton title="Zoom out" onClick={() => zoomAtCenter(stageScale / ZOOM_STEP)} color={color}>
           −
         </ZoomButton>
         <div
@@ -297,7 +369,7 @@ export default function FloorPlanEditor() {
         >
           {Math.round(stageScale * 100)}%
         </div>
-        <ZoomButton title="Reset view" onClick={resetView}>
+        <ZoomButton title="Reset view" onClick={resetView} color={color}>
           ⤢
         </ZoomButton>
       </div>
@@ -312,7 +384,7 @@ export default function FloorPlanEditor() {
           color: color.muted,
         }}
       >
-        Scroll to zoom · Drag empty space to pan · Drag a room to reposition
+        Scroll to zoom · Drag empty space to pan · Drag a room to reposition — rooms snap flush when placed next to each other
       </div>
     </div>
   )

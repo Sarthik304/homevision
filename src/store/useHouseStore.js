@@ -34,6 +34,9 @@ const useHouseStore = create((set) => ({
 
   selectedRoomId: null,
   activeView: '2d',
+  darkMode: false,
+
+  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 
   selectRoom: (id) => set({ selectedRoomId: id }),
 

@@ -1,8 +1,9 @@
 import useHouseStore from '../../store/useHouseStore'
-import { color, radius } from '../../theme'
+import { getColors, radius } from '../../theme'
 
 export default function Navbar() {
-  const { activeView, setActiveView } = useHouseStore()
+  const { activeView, setActiveView, darkMode, toggleDarkMode } = useHouseStore()
+  const color = getColors(darkMode)
 
   return (
     <div
@@ -67,6 +68,23 @@ export default function Navbar() {
           ? 'Drag to rotate · Scroll to zoom · Right-click to pan'
           : 'Click a room to select · Drag to reposition'}
       </div>
+
+      <button
+        onClick={toggleDarkMode}
+        title="Toggle dark mode"
+        style={{
+          padding: '6px 12px',
+          borderRadius: radius.sm,
+          border: `1px solid ${color.border}`,
+          background: color.surface,
+          color: color.text,
+          cursor: 'pointer',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {darkMode ? 'Light mode' : 'Dark mode'}
+      </button>
     </div>
   )
 }
