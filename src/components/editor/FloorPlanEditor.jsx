@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Stage, Layer, Rect, Text, Group, Line } from 'react-konva'
+import { Stage, Layer, Rect, Text, Group, Line, Circle } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, font, radius } from '../../theme'
 
@@ -8,15 +8,19 @@ const PADDING = 40
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const ZOOM_STEP = 1.15
+const MIN_ROOM_SIZE = 1 // meters — smallest a room can be shrunk to via edge resize
+const HANDLE_SIZE = 9 // px, screen size of an edge resize handle
+const EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', left: 'ew-resize', right: 'ew-resize' }
+const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
+const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
+const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — endpoint snap distance to 45° angle increments
+const INTERIOR_HANDLE_RADIUS = 7 // px — endpoint handle for rotating/stretching an interior wall
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
 const SNAP_THRESHOLD = 0.6 // meters — how close an edge has to get before it snaps flush
 
-// Snaps a dragged room's proposed position (in meters) flush against any
-// other room it's close to, so adjacent rooms end up with zero gap between
-// them. Snapping on an axis only kicks in when the rooms actually overlap
-// along the other axis (so two rooms diagonal from each other don't snap).
+
 function getSnappedPosition(room, otherRooms, x, y) {
   const w = room.width
   const h = room.height
@@ -152,6 +156,184 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
+// Freeform partition wall, defined by two arbitrary endpoints (in room-local
+// meters) rather than one of the room's 4 boundary edges. Rendered by
+// projecting the same 1D solid/door/window cutting logic used for boundary
+// walls (`solidWallStretches`) back onto the wall's own direction vector.
+function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, onBodyEnd, onEndpointMove, onEndpointEnd }) {
+  const wallsList = room.interiorWalls ?? []
+
+  return wallsList.map((wall) => {
+    const x1px = wall.x1 * SCALE
+    const y1px = wall.y1 * SCALE
+    const x2px = wall.x2 * SCALE
+    const y2px = wall.y2 * SCALE
+    const dx = x2px - x1px
+    const dy = y2px - y1px
+    const lengthPx = Math.hypot(dx, dy)
+    if (lengthPx < 1) return null
+
+    const ux = dx / lengthPx
+    const uy = dy / lengthPx
+    const nx = -uy
+    const ny = ux
+    const toPoint = (t) => [x1px + ux * t, y1px + uy * t]
+
+    const doors = wall.doors ?? []
+    const windows = wall.windows ?? []
+    const solids = solidWallStretches(lengthPx, doors)
+    const strokeW = Math.max(wall.thickness * SCALE, 3)
+    const wallSelected = wall.id === selectedWallId
+
+    // Selecting this wall is handled by one always-present hit target (the
+    // rail below) rather than a click handler on the wrapping <Group> —
+    // Konva only guarantees a click fires reliably on an actual Shape (the
+    // thing the hit graph tests against), not on a plain Container, so the
+    // select handler lives directly on a Shape instead of relying on event
+    // bubbling + cancelBubble through a Group ancestor.
+    const handleSelect = (e) => {
+      e.cancelBubble = true
+      onSelectWall(wall.id)
+    }
+
+    return (
+      <Group key={wall.id}>
+        {solids.map(([s, e], i) => {
+          const [sx, sy] = toPoint(s)
+          const [ex, ey] = toPoint(e)
+          return (
+            <Line
+              key={`solid-${i}`}
+              points={[sx, sy, ex, ey]}
+              stroke={wallSelected ? color.brand : color.text}
+              strokeWidth={strokeW}
+              lineCap="square"
+              listening={false}
+            />
+          )
+        })}
+
+        {windows.map((win) => {
+          const w = Math.min(win.width * SCALE, lengthPx)
+          const start = Math.max(0, win.offset * lengthPx - w / 2)
+          const end = Math.min(lengthPx, start + w)
+          const [sx, sy] = toPoint(start)
+          const [ex, ey] = toPoint(end)
+          return (
+            <Line
+              key={win.id}
+              points={[sx, sy, ex, ey]}
+              stroke={color.window}
+              strokeWidth={5}
+              lineCap="square"
+              listening={false}
+            />
+          )
+        })}
+
+        {doors.map((d) => {
+          const w = Math.min(d.width * SCALE, lengthPx)
+          const start = Math.max(0, d.offset * lengthPx - w / 2)
+          const mid = start + w / 2
+          const [cx, cy] = toPoint(mid)
+          return (
+            <Line
+              key={d.id}
+              points={[cx, cy, cx + nx * w * 0.7, cy + ny * w * 0.7]}
+              stroke={color.muted}
+              strokeWidth={1.5}
+              dash={[3, 3]}
+              listening={false}
+            />
+          )
+        })}
+
+        {/* Always-present click target + (once selected) drag rail for
+            translating the whole wall. Kept as a single node so there's one
+            reliable, generously-sized hit region regardless of how many
+            solid stretches a door gap has split the visible wall into. */}
+        <Line
+          points={[x1px, y1px, x2px, y2px]}
+          stroke={color.brand}
+          opacity={wallSelected ? 0.18 : 0.001}
+          strokeWidth={Math.max(strokeW * 1.8, 14)}
+          lineCap="round"
+          hitStrokeWidth={Math.max(strokeW * 1.8, 14)}
+          draggable={wallSelected}
+          onClick={handleSelect}
+          onDragMove={(e) => onBodyMove(e, room.id, wall.id)}
+          onDragEnd={(e) => onBodyEnd(e, room.id, wall.id)}
+          onMouseEnter={(e) => {
+            e.target.getStage().container().style.cursor = wallSelected ? 'move' : 'pointer'
+          }}
+          onMouseLeave={(e) => {
+            e.target.getStage().container().style.cursor = 'default'
+          }}
+        />
+
+        {wallSelected &&
+          [
+            ['a', x1px, y1px],
+            ['b', x2px, y2px],
+          ].map(([endpoint, ex, ey]) => (
+            <Circle
+              key={endpoint}
+              x={ex}
+              y={ey}
+              radius={INTERIOR_HANDLE_RADIUS}
+              fill={color.brand}
+              stroke={color.bg}
+              strokeWidth={2}
+              draggable
+              hitStrokeWidth={20}
+              onDragMove={(e) => onEndpointMove(e, room.id, wall.id, endpoint)}
+              onDragEnd={(e) => onEndpointEnd(e, room.id, wall.id, endpoint)}
+              onMouseEnter={(e) => {
+                e.target.getStage().container().style.cursor = 'crosshair'
+              }}
+              onMouseLeave={(e) => {
+                e.target.getStage().container().style.cursor = 'default'
+              }}
+            />
+          ))}
+      </Group>
+    )
+  })
+}
+
+function ResizeHandle({ room, edge, pixelX, pixelY, pixelW, pixelH, color, onResizeMove, onResizeEnd }) {
+  const positions = {
+    top: [pixelX + pixelW / 2, pixelY],
+    bottom: [pixelX + pixelW / 2, pixelY + pixelH],
+    left: [pixelX, pixelY + pixelH / 2],
+    right: [pixelX + pixelW, pixelY + pixelH / 2],
+  }
+  const [hx, hy] = positions[edge]
+
+  return (
+    <Rect
+      x={hx - HANDLE_SIZE / 2}
+      y={hy - HANDLE_SIZE / 2}
+      width={HANDLE_SIZE}
+      height={HANDLE_SIZE}
+      fill={color.bg}
+      stroke={color.brand}
+      strokeWidth={1.5}
+      cornerRadius={2}
+      draggable
+      hitStrokeWidth={16}
+      onDragMove={(e) => onResizeMove(e, room.id, edge)}
+      onDragEnd={(e) => onResizeEnd(e, room.id, edge)}
+      onMouseEnter={(e) => {
+        e.target.getStage().container().style.cursor = EDGE_CURSORS[edge]
+      }}
+      onMouseLeave={(e) => {
+        e.target.getStage().container().style.cursor = 'default'
+      }}
+    />
+  )
+}
+
 function ZoomButton({ children, onClick, title, color }) {
   return (
     <button
@@ -178,7 +360,16 @@ function ZoomButton({ children, onClick, title, color }) {
 }
 
 export default function FloorPlanEditor() {
-  const { rooms, selectedRoomId, selectRoom, updateRoom, darkMode } = useHouseStore()
+  const {
+    rooms,
+    selectedRoomId,
+    selectRoom,
+    updateRoom,
+    selectedInteriorWallId,
+    selectInteriorWall,
+    updateInteriorWall,
+    darkMode,
+  } = useHouseStore()
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
@@ -196,6 +387,14 @@ export default function FloorPlanEditor() {
   }, [])
 
   function handleDragMove(e, roomId) {
+    // dragmove/dragend bubble up from whatever was actually dragged (an
+    // interior wall's rail or endpoint handle, nested inside this same room
+    // Group) all the way up through this Group and on to the Stage, with
+    // Konva keeping `e.target` pointing at that original descendant the
+    // whole way — so without this guard, finishing an interior wall drag
+    // would also relocate the entire room using the wall's own local
+    // coordinates.
+    if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return
     const rawX = (e.target.x() - PADDING) / SCALE
@@ -207,6 +406,7 @@ export default function FloorPlanEditor() {
   }
 
   function handleDragEnd(e, roomId) {
+    if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return
     const rawX = (e.target.x() - PADDING) / SCALE
@@ -216,6 +416,197 @@ export default function FloorPlanEditor() {
     const newX = snapped.xSnapped ? snapped.x : Math.round(snapped.x)
     const newY = snapped.ySnapped ? snapped.y : Math.round(snapped.y)
     updateRoom(roomId, { x: newX, y: newY })
+  }
+
+  
+  function resizeRoomForEdge(e, roomId, edge) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return null
+
+    const pointerX = (e.target.x() + HANDLE_SIZE / 2 - PADDING) / SCALE
+    const pointerY = (e.target.y() + HANDLE_SIZE / 2 - PADDING) / SCALE
+
+    let { x, y, width, height } = room
+
+    if (edge === 'top') {
+      const newY = Math.min(pointerY, room.y + room.height - MIN_ROOM_SIZE)
+      height = room.y + room.height - newY
+      y = newY
+    } else if (edge === 'bottom') {
+      height = Math.max(MIN_ROOM_SIZE, pointerY - room.y)
+    } else if (edge === 'left') {
+      const newX = Math.min(pointerX, room.x + room.width - MIN_ROOM_SIZE)
+      width = room.x + room.width - newX
+      x = newX
+    } else if (edge === 'right') {
+      width = Math.max(MIN_ROOM_SIZE, pointerX - room.x)
+    }
+
+    const pixelX = x * SCALE + PADDING
+    const pixelY = y * SCALE + PADDING
+    const pixelW = width * SCALE
+    const pixelH = height * SCALE
+    const positions = {
+      top: [pixelX + pixelW / 2, pixelY],
+      bottom: [pixelX + pixelW / 2, pixelY + pixelH],
+      left: [pixelX, pixelY + pixelH / 2],
+      right: [pixelX + pixelW, pixelY + pixelH / 2],
+    }
+    const [hx, hy] = positions[edge]
+    e.target.x(hx - HANDLE_SIZE / 2)
+    e.target.y(hy - HANDLE_SIZE / 2)
+
+    return { x, y, width, height }
+  }
+
+  function handleResizeMove(e, roomId, edge) {
+    const rect = resizeRoomForEdge(e, roomId, edge)
+    if (rect) updateRoom(roomId, rect)
+  }
+
+  function handleResizeEnd(e, roomId, edge) {
+    const rect = resizeRoomForEdge(e, roomId, edge)
+    if (!rect) return
+    updateRoom(roomId, {
+      x: Math.round(rect.x * 10) / 10,
+      y: Math.round(rect.y * 10) / 10,
+      width: Math.round(rect.width * 10) / 10,
+      height: Math.round(rect.height * 10) / 10,
+    })
+  }
+
+  function findInteriorWall(roomId, wallId) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return null
+    const wall = (room.interiorWalls ?? []).find((w) => w.id === wallId)
+    if (!wall) return null
+    return { room, wall }
+  }
+
+  // Translates both endpoints of an interior wall by the drag node's pixel
+  // offset, clamped so the wall stays within the room's bounds, then zeroes
+  // the node's own transform since the translation gets baked into the
+  // wall's x1/y1/x2/y2 (and therefore into the points this node is drawn
+  // from) via the store instead.
+  function moveInteriorWallBody(e, roomId, wallId) {
+    const found = findInteriorWall(roomId, wallId)
+    if (!found) return null
+    const { room, wall } = found
+
+    const dxM = e.target.x() / SCALE
+    const dyM = e.target.y() / SCALE
+    const minDx = -Math.min(wall.x1, wall.x2)
+    const maxDx = room.width - Math.max(wall.x1, wall.x2)
+    const minDy = -Math.min(wall.y1, wall.y2)
+    const maxDy = room.height - Math.max(wall.y1, wall.y2)
+    const clampedDx = Math.min(maxDx, Math.max(minDx, dxM))
+    const clampedDy = Math.min(maxDy, Math.max(minDy, dyM))
+
+    e.target.x(0)
+    e.target.y(0)
+
+    return {
+      x1: wall.x1 + clampedDx,
+      y1: wall.y1 + clampedDy,
+      x2: wall.x2 + clampedDx,
+      y2: wall.y2 + clampedDy,
+    }
+  }
+
+  function handleInteriorWallBodyMove(e, roomId, wallId) {
+    const rect = moveInteriorWallBody(e, roomId, wallId)
+    if (rect) updateInteriorWall(roomId, wallId, rect)
+  }
+
+  function handleInteriorWallBodyEnd(e, roomId, wallId) {
+    const rect = moveInteriorWallBody(e, roomId, wallId)
+    if (!rect) return
+    updateInteriorWall(roomId, wallId, {
+      x1: Math.round(rect.x1 * 10) / 10,
+      y1: Math.round(rect.y1 * 10) / 10,
+      x2: Math.round(rect.x2 * 10) / 10,
+      y2: Math.round(rect.y2 * 10) / 10,
+    })
+  }
+
+  // Snaps a dragged interior-wall endpoint — first to the room's corners or
+  // any other interior wall's endpoints (an exact point match is more useful
+  // than an approximate angle once you're already close to one), then, if no
+  // point is nearby, to the nearest 45° increment measured from the wall's
+  // fixed other end.
+  function snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY) {
+    const candidates = [
+      { x: 0, y: 0 },
+      { x: room.width, y: 0 },
+      { x: 0, y: room.height },
+      { x: room.width, y: room.height },
+    ]
+    ;(room.interiorWalls ?? []).forEach((w) => {
+      if (w.id === wall.id) return
+      candidates.push({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 })
+    })
+
+    let bestPoint = null
+    let bestDist = SNAP_POINT_THRESHOLD
+    candidates.forEach((p) => {
+      const d = Math.hypot(rawX - p.x, rawY - p.y)
+      if (d < bestDist) {
+        bestDist = d
+        bestPoint = p
+      }
+    })
+    if (bestPoint) return bestPoint
+
+    const dist = Math.hypot(rawX - otherX, rawY - otherY)
+    if (dist < 0.001) return { x: rawX, y: rawY }
+    const angle = Math.atan2(rawY - otherY, rawX - otherX)
+    const step = Math.PI / 4
+    const nearestAngle = Math.round(angle / step) * step
+    const diffDeg = Math.abs(Math.atan2(Math.sin(angle - nearestAngle), Math.cos(angle - nearestAngle))) * (180 / Math.PI)
+    if (diffDeg <= SNAP_ANGLE_THRESHOLD_DEG) {
+      return { x: otherX + Math.cos(nearestAngle) * dist, y: otherY + Math.sin(nearestAngle) * dist }
+    }
+    return { x: rawX, y: rawY }
+  }
+
+  function moveInteriorWallEndpoint(e, roomId, wallId, endpoint) {
+    const found = findInteriorWall(roomId, wallId)
+    if (!found) return null
+    const { room, wall } = found
+    const otherX = endpoint === 'a' ? wall.x2 : wall.x1
+    const otherY = endpoint === 'a' ? wall.y2 : wall.y1
+
+    const rawX = Math.min(room.width, Math.max(0, e.target.x() / SCALE))
+    const rawY = Math.min(room.height, Math.max(0, e.target.y() / SCALE))
+    const snapped = snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY)
+
+    let x = Math.min(room.width, Math.max(0, snapped.x))
+    let y = Math.min(room.height, Math.max(0, snapped.y))
+
+    if (Math.hypot(x - otherX, y - otherY) < MIN_INTERIOR_WALL_LENGTH) {
+      const angle = Math.atan2(y - otherY, x - otherX)
+      x = otherX + Math.cos(angle) * MIN_INTERIOR_WALL_LENGTH
+      y = otherY + Math.sin(angle) * MIN_INTERIOR_WALL_LENGTH
+    }
+
+    e.target.x(x * SCALE)
+    e.target.y(y * SCALE)
+
+    return endpoint === 'a' ? { x1: x, y1: y } : { x2: x, y2: y }
+  }
+
+  function handleInteriorWallEndpointMove(e, roomId, wallId, endpoint) {
+    const updates = moveInteriorWallEndpoint(e, roomId, wallId, endpoint)
+    if (updates) updateInteriorWall(roomId, wallId, updates)
+  }
+
+  function handleInteriorWallEndpointEnd(e, roomId, wallId, endpoint) {
+    const updates = moveInteriorWallEndpoint(e, roomId, wallId, endpoint)
+    if (!updates) return
+    const rounded = Object.fromEntries(
+      Object.entries(updates).map(([key, value]) => [key, Math.round(value * 10) / 10])
+    )
+    updateInteriorWall(roomId, wallId, rounded)
   }
 
   function zoomAtCenter(nextScale) {
@@ -278,7 +669,13 @@ export default function FloorPlanEditor() {
         x={stagePos.x}
         y={stagePos.y}
         draggable
-        onDragEnd={(e) => setStagePos({ x: e.target.x(), y: e.target.y() })}
+        onDragEnd={(e) => {
+          // See the same guard in handleDragMove/handleDragEnd — dragend
+          // bubbles here from any descendant's drag (a room, an interior
+          // wall...), so only react when the Stage itself was dragged.
+          if (e.target !== e.currentTarget) return
+          setStagePos({ x: e.target.x(), y: e.target.y() })
+        }}
         onWheel={handleWheel}
       >
         <Layer>
@@ -311,6 +708,17 @@ export default function FloorPlanEditor() {
 
                 <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
 
+                <InteriorWalls
+                  room={room}
+                  selectedWallId={selectedInteriorWallId}
+                  color={color}
+                  onSelectWall={selectInteriorWall}
+                  onBodyMove={handleInteriorWallBodyMove}
+                  onBodyEnd={handleInteriorWallBodyEnd}
+                  onEndpointMove={handleInteriorWallEndpointMove}
+                  onEndpointEnd={handleInteriorWallEndpointEnd}
+                />
+
                 <Text
                   text={room.name}
                   width={pixelW}
@@ -321,6 +729,7 @@ export default function FloorPlanEditor() {
                   fontStyle={isSelected ? 'bold' : 'normal'}
                   fill={isSelected ? color.brand : color.text}
                   fontFamily={font}
+                  listening={false}
                 />
 
                 <Text
@@ -331,10 +740,34 @@ export default function FloorPlanEditor() {
                   fontSize={10}
                   fill={color.muted}
                   fontFamily={font}
+                  listening={false}
                 />
               </Group>
             )
           })}
+
+          {rooms
+            .filter((room) => room.id === selectedRoomId)
+            .map((room) => {
+              const pixelX = room.x * SCALE + PADDING
+              const pixelY = room.y * SCALE + PADDING
+              const pixelW = room.width * SCALE
+              const pixelH = room.height * SCALE
+              return WALL_KEYS.map((edge) => (
+                <ResizeHandle
+                  key={`${room.id}-${edge}`}
+                  room={room}
+                  edge={edge}
+                  pixelX={pixelX}
+                  pixelY={pixelY}
+                  pixelW={pixelW}
+                  pixelH={pixelH}
+                  color={color}
+                  onResizeMove={handleResizeMove}
+                  onResizeEnd={handleResizeEnd}
+                />
+              ))
+            })}
         </Layer>
       </Stage>
 
@@ -384,7 +817,7 @@ export default function FloorPlanEditor() {
           color: color.muted,
         }}
       >
-        Scroll to zoom · Drag empty space to pan · Drag a room to reposition — rooms snap flush when placed next to each other
+        Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it
       </div>
     </div>
   )

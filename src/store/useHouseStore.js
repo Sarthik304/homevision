@@ -2,6 +2,16 @@ import { create } from 'zustand'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
+// Applies `fn` to a single interior wall (identified by roomId + wallId) inside
+// the rooms array, leaving every other room/wall untouched.
+function mapWall(rooms, roomId, wallId, fn) {
+  return rooms.map((room) =>
+    room.id !== roomId
+      ? room
+      : { ...room, interiorWalls: room.interiorWalls.map((w) => (w.id === wallId ? fn(w) : w)) }
+  )
+}
+
 const useHouseStore = create((set) => ({
   rooms: [
     {
@@ -16,6 +26,7 @@ const useHouseStore = create((set) => ({
       walls: { ...DEFAULT_WALLS },
       doors: [],
       windows: [],
+      interiorWalls: [],
     },
     {
       id: 2,
@@ -29,16 +40,22 @@ const useHouseStore = create((set) => ({
       walls: { ...DEFAULT_WALLS },
       doors: [],
       windows: [],
+      interiorWalls: [],
     },
   ],
 
   selectedRoomId: null,
+  selectedInteriorWallId: null,
   activeView: '2d',
   darkMode: false,
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 
-  selectRoom: (id) => set({ selectedRoomId: id }),
+  // Selecting a room is a separate focus from selecting one of its interior
+  // walls, so it clears any wall selection rather than layering on top of it.
+  selectRoom: (id) => set({ selectedRoomId: id, selectedInteriorWallId: null }),
+
+  selectInteriorWall: (wallId) => set({ selectedInteriorWallId: wallId }),
 
   setActiveView: (view) => set({ activeView: view }),
 
@@ -65,6 +82,7 @@ const useHouseStore = create((set) => ({
           walls: { ...DEFAULT_WALLS },
           doors: [],
           windows: [],
+          interiorWalls: [],
         },
       ],
     })),
@@ -85,15 +103,23 @@ const useHouseStore = create((set) => ({
           walls: { top: false, bottom: false, left: false, right: false },
           doors: [],
           windows: [],
+          interiorWalls: [],
         },
       ],
     })),
 
   removeRoom: (id) =>
-    set((state) => ({
-      rooms: state.rooms.filter((room) => room.id !== id),
-      selectedRoomId: state.selectedRoomId === id ? null : state.selectedRoomId,
-    })),
+    set((state) => {
+      const rooms = state.rooms.filter((room) => room.id !== id)
+      const wallStillExists = rooms.some((room) =>
+        (room.interiorWalls ?? []).some((w) => w.id === state.selectedInteriorWallId)
+      )
+      return {
+        rooms,
+        selectedRoomId: state.selectedRoomId === id ? null : state.selectedRoomId,
+        selectedInteriorWallId: wallStillExists ? state.selectedInteriorWallId : null,
+      }
+    }),
 
   updateRoom: (id, updates) =>
     set((state) => ({
@@ -180,6 +206,101 @@ const useHouseStore = create((set) => ({
           ? { ...room, windows: room.windows.filter((w) => w.id !== windowId) }
           : room
       ),
+    })),
+
+  addInteriorWall: (roomId) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) => {
+        if (room.id !== roomId) return room
+        return {
+          ...room,
+          interiorWalls: [
+            ...room.interiorWalls,
+            {
+              id: Date.now(),
+              x1: room.width * 0.25,
+              y1: room.height / 2,
+              x2: room.width * 0.75,
+              y2: room.height / 2,
+              thickness: 0.1,
+              doors: [],
+              windows: [],
+            },
+          ],
+        }
+      }),
+    })),
+
+  updateInteriorWall: (roomId, wallId, updates) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              interiorWalls: room.interiorWalls.map((w) =>
+                w.id === wallId ? { ...w, ...updates } : w
+              ),
+            }
+          : room
+      ),
+    })),
+
+  removeInteriorWall: (roomId, wallId) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, interiorWalls: room.interiorWalls.filter((w) => w.id !== wallId) }
+          : room
+      ),
+      selectedInteriorWallId: state.selectedInteriorWallId === wallId ? null : state.selectedInteriorWallId,
+    })),
+
+  addInteriorDoor: (roomId, wallId) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        doors: [...w.doors, { id: Date.now(), offset: 0.5, width: 0.9 }],
+      })),
+    })),
+
+  updateInteriorDoor: (roomId, wallId, doorId, updates) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        doors: w.doors.map((d) => (d.id === doorId ? { ...d, ...updates } : d)),
+      })),
+    })),
+
+  removeInteriorDoor: (roomId, wallId, doorId) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        doors: w.doors.filter((d) => d.id !== doorId),
+      })),
+    })),
+
+  addInteriorWindow: (roomId, wallId) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        windows: [...w.windows, { id: Date.now(), offset: 0.5, width: 1.2, height: 1.2 }],
+      })),
+    })),
+
+  updateInteriorWindow: (roomId, wallId, windowId, updates) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        windows: w.windows.map((win) => (win.id === windowId ? { ...win, ...updates } : win)),
+      })),
+    })),
+
+  removeInteriorWindow: (roomId, wallId, windowId) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        windows: w.windows.filter((win) => win.id !== windowId),
+      })),
     })),
 }))
 

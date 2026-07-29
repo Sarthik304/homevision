@@ -82,7 +82,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-function WallWithOpenings({ length, position, rotation, color, glassColor, roomId, onClick, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, onClick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(() => buildSolidSegments(length, openings), [length, openings])
   const windowOpenings = openings.filter((o) => o.type === 'window')
@@ -100,7 +100,7 @@ function WallWithOpenings({ length, position, rotation, color, glassColor, roomI
           position={[seg.x + seg.w / 2 - length / 2, seg.y + seg.h / 2, 0]}
           onClick={handleClick}
         >
-          <boxGeometry args={[seg.w, seg.h, WALL_THICKNESS]} />
+          <boxGeometry args={[seg.w, seg.h, thickness]} />
           <meshStandardMaterial color={color} />
         </mesh>
       ))}
@@ -111,7 +111,7 @@ function WallWithOpenings({ length, position, rotation, color, glassColor, roomI
           position={[(win.start + win.end) / 2 - length / 2, (win.bottom + win.top) / 2, 0]}
           onClick={handleClick}
         >
-          <boxGeometry args={[win.end - win.start, win.top - win.bottom, WALL_THICKNESS * 0.4]} />
+          <boxGeometry args={[win.end - win.start, win.top - win.bottom, thickness * 0.4]} />
           <meshStandardMaterial color={glassColor} transparent opacity={0.35} />
         </mesh>
       ))}
@@ -172,6 +172,31 @@ export default function Room3D({ room, isSelected, onClick }) {
             windows={windows.filter((win) => win.wall === w.key)}
           />
         ))}
+
+      {(room.interiorWalls ?? []).map((wall) => {
+        const dx = wall.x2 - wall.x1
+        const dy = wall.y2 - wall.y1
+        const wallLength = Math.hypot(dx, dy)
+        if (wallLength < 0.01) return null
+        const midX = (wall.x1 + wall.x2) / 2 - width / 2
+        const midZ = (wall.y1 + wall.y2) / 2 - height / 2
+        const angle = Math.atan2(-dy, dx)
+        return (
+          <WallWithOpenings
+            key={wall.id}
+            length={wallLength}
+            position={[midX, 0, midZ]}
+            rotation={[0, angle, 0]}
+            thickness={wall.thickness}
+            color={wallColor}
+            glassColor={palette.glass}
+            roomId={room.id}
+            onClick={onClick}
+            doors={wall.doors ?? []}
+            windows={wall.windows ?? []}
+          />
+        )
+      })}
 
       {isSelected && (
         <mesh position={[0, WALL_HEIGHT / 2, 0]} raycast={() => null}>

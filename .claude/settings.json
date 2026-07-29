@@ -23,10 +23,41 @@
       "Bash(break)",
       "Bash(npx --yes playwright --version)",
       "Bash(node -e \"require.resolve\\('playwright'\\)\")",
-      "Bash(npx playwright *)"
+      "Bash(npx playwright *)",
+      "Bash(timeout 15 npx vite build)",
+      "Bash(chromium-cli help *)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(npx --no-install puppeteer --version)",
+      "Bash(node -e \"console.log\\(process.version\\)\")",
+      "Bash(npx --no-install playwright install --dry-run chromium)",
+      "Read(//Users/sarthikjena/Library/Caches/ms-playwright/**)",
+      "Bash(find ~/.npm/_npx -maxdepth 3 -iname \"playwright\" 2>/dev/null)",
+      "Read(//Users/sarthikjena/.npm/_npx/**)",
+      "Bash(node -e \"const pw = require\\('/Users/sarthikjena/.npm/_npx/e41f203b7505f1fb/node_modules/playwright'\\); console.log\\(Object.keys\\(pw\\)\\)\")",
+      "Bash(lsof -ti:5183 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(nohup npx vite --port 5183 --strictPort)",
+      "Bash(disown)",
+      "Bash(timeout 30 bash -c 'until curl -sf http://localhost:5183 >/dev/null; do sleep 1; done')",
+      "Bash(curl -sf http://localhost:5183)",
+      "Bash(node /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/test-wall-select.js)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/*.png *)",
+      "Bash(node /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/test-wall-drag.js)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/s*.png)",
+      "Bash(node /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/test-wall-drag2.js)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/t*.png)",
+      "Bash(node /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/test-wall-drag3.js)",
+      "Bash(node /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/test-wall-drag4.js)",
+      "Bash(tail -30 /tmp/homevision-vite.log)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('/Users/sarthikjena/Desktop/homevision/.claude/settings.local.json'\\)\\)\")",
+      "Bash(rm -f /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/3d-*.png *)",
+      "Bash(git check-ignore *)"
     ],
     "additionalDirectories": [
-      "/tmp"
+      "/tmp",
+      "/private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad"
     ]
   }
 }

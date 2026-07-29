@@ -1,4 +1,4 @@
-# 🏠 HomeVision
+# 🏠🦖 HomeVision
 
 An interactive 3D home configurator. Design your house in 2D, walk through it in 3D.
 
@@ -60,7 +60,7 @@ src/
 ```bash
 git init
 git add .
-git commit -m "Initial commit — HomeVision starter"
+git commit -m " HomeVision starter"
 git remote add origin https://github.com/YOUR_USERNAME/homevision.git
 git push -u origin main
 ```

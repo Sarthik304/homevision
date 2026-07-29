@@ -79,6 +79,80 @@ function WallToggles({ room, toggleWall, color }) {
   )
 }
 
+function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, showPosition, color, removeLabel }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 5,
+        fontSize: 12,
+        background: color.surface,
+        borderRadius: radius.sm,
+        padding: '6px 8px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {label != null && <span style={{ flex: 1, color: color.text }}>{label}</span>}
+        <span style={{ color: color.muted, fontSize: 11 }}>W</span>
+        <input
+          type="number"
+          value={item.width}
+          min={minWidth}
+          step={0.1}
+          onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
+          style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text, flex: label == null ? 1 : undefined }}
+        />
+        {minHeight != null && (
+          <>
+            <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+            <input
+              type="number"
+              value={item.height}
+              min={minHeight}
+              step={0.1}
+              onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
+              style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+            />
+          </>
+        )}
+        <span style={{ color: color.muted }}>m</span>
+        <button
+          onClick={() => onRemove(item.id)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: color.danger,
+            cursor: 'pointer',
+            fontSize: 14,
+            lineHeight: 1,
+            padding: '2px 4px',
+          }}
+          aria-label={removeLabel}
+        >
+          ×
+        </button>
+      </div>
+
+      {showPosition && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: color.muted, fontSize: 10 }}>Start</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={item.offset}
+            onChange={(e) => onUpdate(item.id, { offset: parseFloat(e.target.value) })}
+            style={{ flex: 1, accentColor: color.brand }}
+          />
+          <span style={{ color: color.muted, fontSize: 10 }}>End</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight, showPosition, color }) {
   const fieldLabel = getFieldLabel(color)
   const inputStyle = getInputStyle(color)
@@ -124,76 +198,120 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
       {items.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
           {items.map((item) => (
-            <div
+            <OpeningItemRow
               key={item.id}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 5,
-                fontSize: 12,
-                background: color.surface,
-                borderRadius: radius.sm,
-                padding: '6px 8px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ flex: 1, color: color.text }}>{WALL_LABELS[item.wall]}</span>
-                <span style={{ color: color.muted, fontSize: 11 }}>W</span>
-                <input
-                  type="number"
-                  value={item.width}
-                  min={minWidth}
-                  step={0.1}
-                  onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
-                  style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
-                />
-                {minHeight != null && (
-                  <>
-                    <span style={{ color: color.muted, fontSize: 11 }}>H</span>
-                    <input
-                      type="number"
-                      value={item.height}
-                      min={minHeight}
-                      step={0.1}
-                      onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
-                      style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
-                    />
-                  </>
-                )}
-                <span style={{ color: color.muted }}>m</span>
-                <button
-                  onClick={() => onRemove(item.id)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: color.danger,
-                    cursor: 'pointer',
-                    fontSize: 14,
-                    lineHeight: 1,
-                    padding: '2px 4px',
-                  }}
-                  aria-label={`Remove ${title.toLowerCase()}`}
-                >
-                  ×
-                </button>
-              </div>
+              item={item}
+              label={WALL_LABELS[item.wall]}
+              onUpdate={onUpdate}
+              onRemove={onRemove}
+              minWidth={minWidth}
+              minHeight={minHeight}
+              showPosition={showPosition}
+              color={color}
+              removeLabel={`Remove ${title.toLowerCase()}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-              {showPosition && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ color: color.muted, fontSize: 10 }}>Left</span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={item.offset}
-                    onChange={(e) => onUpdate(item.id, { offset: parseFloat(e.target.value) })}
-                    style={{ flex: 1, accentColor: color.brand }}
-                  />
-                  <span style={{ color: color.muted, fontSize: 10 }}>Right</span>
-                </div>
-              )}
-            </div>
+function InteriorWallCard({ room, wall, actions, color }) {
+  const fieldLabel = getFieldLabel(color)
+  const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1)
+
+  const addButtonStyle = {
+    flex: 1,
+    padding: '6px 0',
+    background: color.bg,
+    border: `1px solid ${color.border}`,
+    borderRadius: radius.sm,
+    color: color.text,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 600,
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        background: color.bg,
+        border: `1px solid ${color.border}`,
+        borderRadius: radius.sm,
+        padding: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ flex: 1, fontSize: 12, color: color.text }}>Wall · {length.toFixed(1)}m</span>
+        <span style={{ color: color.muted, fontSize: 11 }}>Thickness</span>
+        <input
+          type="number"
+          value={wall.thickness}
+          min={0.05}
+          max={0.5}
+          step={0.01}
+          onChange={(e) =>
+            actions.updateInteriorWall(room.id, wall.id, { thickness: parseFloat(e.target.value) || 0.05 })
+          }
+          style={{ width: 52, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.surface, color: color.text }}
+        />
+        <button
+          onClick={() => actions.removeInteriorWall(room.id, wall.id)}
+          style={{ background: 'transparent', border: 'none', color: color.danger, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
+          aria-label="Remove interior wall"
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={() => actions.addInteriorDoor(room.id, wall.id)} style={addButtonStyle}>
+          + Add door
+        </button>
+        <button onClick={() => actions.addInteriorWindow(room.id, wall.id)} style={addButtonStyle}>
+          + Add window
+        </button>
+      </div>
+
+      {wall.doors.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ ...fieldLabel, marginBottom: 0 }}>Doors</label>
+          {wall.doors.map((door) => (
+            <OpeningItemRow
+              key={door.id}
+              item={door}
+              label={null}
+              minWidth={0.3}
+              showPosition
+              color={color}
+              removeLabel="Remove door"
+              onUpdate={(id, updates) => actions.updateInteriorDoor(room.id, wall.id, id, updates)}
+              onRemove={(id) => actions.removeInteriorDoor(room.id, wall.id, id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {wall.windows.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ ...fieldLabel, marginBottom: 0 }}>Windows</label>
+          {wall.windows.map((win) => (
+            <OpeningItemRow
+              key={win.id}
+              item={win}
+              label={null}
+              minWidth={0.2}
+              minHeight={0.2}
+              showPosition
+              color={color}
+              removeLabel="Remove window"
+              onUpdate={(id, updates) => actions.updateInteriorWindow(room.id, wall.id, id, updates)}
+              onRemove={(id) => actions.removeInteriorWindow(room.id, wall.id, id)}
+            />
           ))}
         </div>
       )}
@@ -218,8 +336,28 @@ export default function Sidebar() {
     addWindow,
     updateWindow,
     removeWindow,
+    addInteriorWall,
+    updateInteriorWall,
+    removeInteriorWall,
+    addInteriorDoor,
+    updateInteriorDoor,
+    removeInteriorDoor,
+    addInteriorWindow,
+    updateInteriorWindow,
+    removeInteriorWindow,
     darkMode,
   } = useHouseStore()
+
+  const interiorWallActions = {
+    updateInteriorWall,
+    removeInteriorWall,
+    addInteriorDoor,
+    updateInteriorDoor,
+    removeInteriorDoor,
+    addInteriorWindow,
+    updateInteriorWindow,
+    removeInteriorWindow,
+  }
 
   const color = getColors(darkMode)
   const sectionHeader = getSectionHeader(color)
@@ -434,6 +572,30 @@ export default function Sidebar() {
             minHeight={0.2}
             color={color}
           />
+
+          <div style={{ height: 1, background: color.border }} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={sectionHeader}>Interior walls</div>
+
+            {(selectedRoom.interiorWalls ?? []).map((wall) => (
+              <InteriorWallCard
+                key={wall.id}
+                room={selectedRoom}
+                wall={wall}
+                actions={interiorWallActions}
+                color={color}
+              />
+            ))}
+
+            <button onClick={() => addInteriorWall(selectedRoom.id)} style={secondaryButton}>
+              + Add interior wall
+            </button>
+
+            <div style={{ fontSize: 11, color: color.muted }}>
+              Drag a wall or its endpoints in the 2D view to position and resize it.
+            </div>
+          </div>
 
           <button
             onClick={() => removeRoom(selectedRoom.id)}
