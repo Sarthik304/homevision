@@ -5,8 +5,13 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
 
 export default function HouseViewer() {
-  const { rooms, selectedRoomId, selectRoom, darkMode } = useHouseStore()
+  const { rooms, selectedRoomId, selectRoom, selectBoundaryWall, selectInteriorWall, darkMode } = useHouseStore()
   const color = getColors(darkMode)
+
+  const handleSelectWall = (kind, key) => {
+    if (kind === 'boundary') selectBoundaryWall(key)
+    else selectInteriorWall(key)
+  }
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
@@ -43,6 +48,7 @@ export default function HouseViewer() {
             room={room}
             isSelected={room.id === selectedRoomId}
             onClick={selectRoom}
+            onSelectWall={handleSelectWall}
           />
         ))}
 

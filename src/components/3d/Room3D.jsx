@@ -26,9 +26,7 @@ function computeOpenings(length, doors, windows) {
     const w = Math.min(win.width, length)
     const start = Math.max(0, win.offset * length - w / 2)
     const end = Math.min(length, start + w)
-    // A tall window pushes its sill down toward the floor rather than
-    // getting truncated at the top, so the requested height is honoured
-    // up to the wall's own height.
+    // tall windows push the sill down instead of getting truncated at the top
     const requestedHeight = Math.min(win.height, WALL_HEIGHT)
     const top = Math.min(WALL_HEIGHT, WINDOW_SILL + requestedHeight)
     const bottom = Math.max(0, top - requestedHeight)
@@ -38,8 +36,7 @@ function computeOpenings(length, doors, windows) {
   return openings
 }
 
-// Splits a wall's length x height rectangle into solid boxes that avoid the
-// door/window openings cut into it.
+// splits a wall's length x height rectangle into solid boxes around the openings
 function buildSolidSegments(length, openings) {
   const bounds = new Set([0, length])
   openings.forEach((o) => {
@@ -82,7 +79,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, onClick, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(() => buildSolidSegments(length, openings), [length, openings])
   const windowOpenings = openings.filter((o) => o.type === 'window')
@@ -90,6 +87,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   const handleClick = (e) => {
     e.stopPropagation()
     onClick(roomId)
+    onSelectWall(wallKind, wallKey)
   }
 
   return (
@@ -119,7 +117,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, isSelected, onClick }) {
+export default function Room3D({ room, isSelected, onClick, onSelectWall }) {
   const darkMode = useHouseStore((s) => s.darkMode)
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
@@ -164,10 +162,13 @@ export default function Room3D({ room, isSelected, onClick }) {
             length={w.length}
             position={w.position}
             rotation={w.rotation}
-            color={wallColor}
+            color={(room.wallColors ?? {})[w.key] ?? wallColor}
             glassColor={palette.glass}
             roomId={room.id}
+            wallKind="boundary"
+            wallKey={w.key}
             onClick={onClick}
+            onSelectWall={onSelectWall}
             doors={doors.filter((d) => d.wall === w.key)}
             windows={windows.filter((win) => win.wall === w.key)}
           />
@@ -188,10 +189,13 @@ export default function Room3D({ room, isSelected, onClick }) {
             position={[midX, 0, midZ]}
             rotation={[0, angle, 0]}
             thickness={wall.thickness}
-            color={wallColor}
+            color={wall.color ?? wallColor}
             glassColor={palette.glass}
             roomId={room.id}
+            wallKind="interior"
+            wallKey={wall.id}
             onClick={onClick}
+            onSelectWall={onSelectWall}
             doors={wall.doors ?? []}
             windows={wall.windows ?? []}
           />

@@ -2,8 +2,7 @@ import { create } from 'zustand'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
-// Applies `fn` to a single interior wall (identified by roomId + wallId) inside
-// the rooms array, leaving every other room/wall untouched.
+// applies fn to one interior wall (by roomId + wallId), leaving everything else untouched
 function mapWall(rooms, roomId, wallId, fn) {
   return rooms.map((room) =>
     room.id !== roomId
@@ -24,6 +23,7 @@ const useHouseStore = create((set) => ({
       wallColor: '#f5f0eb',
       floorColor: '#c8a882',
       walls: { ...DEFAULT_WALLS },
+      wallColors: {},
       doors: [],
       windows: [],
       interiorWalls: [],
@@ -38,6 +38,7 @@ const useHouseStore = create((set) => ({
       wallColor: '#e8f0fe',
       floorColor: '#a0aec0',
       walls: { ...DEFAULT_WALLS },
+      wallColors: {},
       doors: [],
       windows: [],
       interiorWalls: [],
@@ -46,16 +47,18 @@ const useHouseStore = create((set) => ({
 
   selectedRoomId: null,
   selectedInteriorWallId: null,
+  selectedBoundaryWallKey: null,
   activeView: '2d',
   darkMode: false,
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 
-  // Selecting a room is a separate focus from selecting one of its interior
-  // walls, so it clears any wall selection rather than layering on top of it.
-  selectRoom: (id) => set({ selectedRoomId: id, selectedInteriorWallId: null }),
+  // selecting a room clears any wall selection, and vice versa (see selectInteriorWall/selectBoundaryWall)
+  selectRoom: (id) => set({ selectedRoomId: id, selectedInteriorWallId: null, selectedBoundaryWallKey: null }),
 
-  selectInteriorWall: (wallId) => set({ selectedInteriorWallId: wallId }),
+  selectInteriorWall: (wallId) => set({ selectedInteriorWallId: wallId, selectedBoundaryWallKey: null }),
+
+  selectBoundaryWall: (wallKey) => set({ selectedBoundaryWallKey: wallKey, selectedInteriorWallId: null }),
 
   setActiveView: (view) => set({ activeView: view }),
 
@@ -80,6 +83,7 @@ const useHouseStore = create((set) => ({
           wallColor: '#ffffff',
           floorColor: '#d4c5a9',
           walls: { ...DEFAULT_WALLS },
+          wallColors: {},
           doors: [],
           windows: [],
           interiorWalls: [],
@@ -101,6 +105,7 @@ const useHouseStore = create((set) => ({
           wallColor: '#ffffff',
           floorColor: '#e2d6c1',
           walls: { top: false, bottom: false, left: false, right: false },
+          wallColors: {},
           doors: [],
           windows: [],
           interiorWalls: [],
@@ -118,6 +123,7 @@ const useHouseStore = create((set) => ({
         rooms,
         selectedRoomId: state.selectedRoomId === id ? null : state.selectedRoomId,
         selectedInteriorWallId: wallStillExists ? state.selectedInteriorWallId : null,
+        selectedBoundaryWallKey: state.selectedRoomId === id ? null : state.selectedBoundaryWallKey,
       }
     }),
 
@@ -140,6 +146,19 @@ const useHouseStore = create((set) => ({
           windows: wallNowPresent ? room.windows : room.windows.filter((w) => w.wall !== wallKey),
         }
       }),
+      selectedBoundaryWallKey:
+        state.selectedBoundaryWallKey === wallKey && state.selectedRoomId === roomId
+          ? null
+          : state.selectedBoundaryWallKey,
+    })),
+
+  updateWallColor: (roomId, wallKey, color) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, wallColors: { ...(room.wallColors ?? {}), [wallKey]: color } }
+          : room
+      ),
     })),
 
   addDoor: (roomId, wall) =>

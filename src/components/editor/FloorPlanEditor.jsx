@@ -69,8 +69,7 @@ function getSnappedPosition(room, otherRooms, x, y) {
   return { x: snappedX, y: snappedY, xSnapped, ySnapped }
 }
 
-// Along a wall of pixel length `lengthPx`, cut out the door openings and
-// return the remaining solid stretches (as [start, end] pixel ranges).
+// cuts door gaps out of a wall of pixel length lengthPx, returns the remaining [start, end] solid stretches
 function solidWallStretches(lengthPx, doors) {
   const gaps = doors
     .map((d) => {
@@ -156,10 +155,7 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
-// Freeform partition wall, defined by two arbitrary endpoints (in room-local
-// meters) rather than one of the room's 4 boundary edges. Rendered by
-// projecting the same 1D solid/door/window cutting logic used for boundary
-// walls (`solidWallStretches`) back onto the wall's own direction vector.
+// interior partition walls: freeform two-endpoint walls, not tied to a room's 4 boundary edges
 function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, onBodyEnd, onEndpointMove, onEndpointEnd }) {
   const wallsList = room.interiorWalls ?? []
 
@@ -185,12 +181,7 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, 
     const strokeW = Math.max(wall.thickness * SCALE, 3)
     const wallSelected = wall.id === selectedWallId
 
-    // Selecting this wall is handled by one always-present hit target (the
-    // rail below) rather than a click handler on the wrapping <Group> —
-    // Konva only guarantees a click fires reliably on an actual Shape (the
-    // thing the hit graph tests against), not on a plain Container, so the
-    // select handler lives directly on a Shape instead of relying on event
-    // bubbling + cancelBubble through a Group ancestor.
+    // lives on a Shape (the rail below), not the wrapping Group, so the click reliably fires
     const handleSelect = (e) => {
       e.cancelBubble = true
       onSelectWall(wall.id)
@@ -248,10 +239,7 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, 
           )
         })}
 
-        {/* Always-present click target + (once selected) drag rail for
-            translating the whole wall. Kept as a single node so there's one
-            reliable, generously-sized hit region regardless of how many
-            solid stretches a door gap has split the visible wall into. */}
+        {/* click target + drag rail for translating the whole wall */}
         <Line
           points={[x1px, y1px, x2px, y2px]}
           stroke={color.brand}
@@ -387,13 +375,7 @@ export default function FloorPlanEditor() {
   }, [])
 
   function handleDragMove(e, roomId) {
-    // dragmove/dragend bubble up from whatever was actually dragged (an
-    // interior wall's rail or endpoint handle, nested inside this same room
-    // Group) all the way up through this Group and on to the Stage, with
-    // Konva keeping `e.target` pointing at that original descendant the
-    // whole way — so without this guard, finishing an interior wall drag
-    // would also relocate the entire room using the wall's own local
-    // coordinates.
+    // ignore drags bubbling up from a nested interior wall, only handle the room Group's own drag
     if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return
@@ -483,11 +465,7 @@ export default function FloorPlanEditor() {
     return { room, wall }
   }
 
-  // Translates both endpoints of an interior wall by the drag node's pixel
-  // offset, clamped so the wall stays within the room's bounds, then zeroes
-  // the node's own transform since the translation gets baked into the
-  // wall's x1/y1/x2/y2 (and therefore into the points this node is drawn
-  // from) via the store instead.
+  // translates both endpoints of an interior wall by the drag node's pixel offset, clamped to the room's bounds
   function moveInteriorWallBody(e, roomId, wallId) {
     const found = findInteriorWall(roomId, wallId)
     if (!found) return null
@@ -529,11 +507,7 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // Snaps a dragged interior-wall endpoint — first to the room's corners or
-  // any other interior wall's endpoints (an exact point match is more useful
-  // than an approximate angle once you're already close to one), then, if no
-  // point is nearby, to the nearest 45° increment measured from the wall's
-  // fixed other end.
+  // snaps a dragged endpoint to room corners / other walls' endpoints first, else to the nearest 45°
   function snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY) {
     const candidates = [
       { x: 0, y: 0 },
@@ -670,9 +644,7 @@ export default function FloorPlanEditor() {
         y={stagePos.y}
         draggable
         onDragEnd={(e) => {
-          // See the same guard in handleDragMove/handleDragEnd — dragend
-          // bubbles here from any descendant's drag (a room, an interior
-          // wall...), so only react when the Stage itself was dragged.
+          // ignore drags bubbling up from a room/wall, only handle the Stage's own pan drag
           if (e.target !== e.currentTarget) return
           setStagePos({ x: e.target.x(), y: e.target.y() })
         }}

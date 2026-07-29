@@ -1,5 +1,5 @@
 import { HexColorPicker } from 'react-colorful'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 
@@ -74,6 +74,68 @@ function WallToggles({ room, toggleWall, color }) {
       </div>
       <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
         Toggle a side to add or remove a wall wherever the floor is present.
+      </div>
+    </div>
+  )
+}
+
+function getBoundaryWallColor(room, key) {
+  return (room.wallColors ?? {})[key] ?? room.wallColor
+}
+
+// per-wall colour swatches for the selected room's boundary walls
+function WallColorSwatches({ room, availableWalls, updateWallColor, colorTarget, setColorTarget, color }) {
+  const fieldLabel = getFieldLabel(color)
+
+  if (availableWalls.length === 0) return null
+
+  return (
+    <div>
+      <label style={fieldLabel}>Per-wall colour</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {availableWalls.map((key) => {
+          const target = `boundary:${key}`
+          const isOpen = colorTarget === target
+          return (
+            <div key={key}>
+              <div
+                onClick={() => setColorTarget(isOpen ? null : target)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 8px',
+                  borderRadius: radius.sm,
+                  border: isOpen ? `2px solid ${color.brand}` : `1px solid ${color.border}`,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  color: color.text,
+                }}
+              >
+                <div
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 3,
+                    background: getBoundaryWallColor(room, key),
+                    border: `1px solid ${color.border}`,
+                    flexShrink: 0,
+                  }}
+                />
+                {WALL_LABELS[key]}
+              </div>
+              {isOpen && (
+                <div style={{ marginTop: 8 }}>
+                  <HexColorPicker
+                    color={getBoundaryWallColor(room, key)}
+                    onChange={(c) => updateWallColor(room.id, key, c)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -217,9 +279,12 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
   )
 }
 
-function InteriorWallCard({ room, wall, actions, color }) {
+function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, color }) {
   const fieldLabel = getFieldLabel(color)
   const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1)
+  const colorTargetKey = `interior:${wall.id}`
+  const isColorOpen = colorTarget === colorTargetKey
+  const wallColorValue = wall.color ?? room.wallColor
 
   const addButtonStyle = {
     flex: 1,
@@ -247,6 +312,19 @@ function InteriorWallCard({ room, wall, actions, color }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ flex: 1, fontSize: 12, color: color.text }}>Wall · {length.toFixed(1)}m</span>
+        <div
+          onClick={() => setColorTarget(isColorOpen ? null : colorTargetKey)}
+          title="Wall colour"
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: radius.sm,
+            background: wallColorValue,
+            border: isColorOpen ? `2px solid ${color.brand}` : `1px solid ${color.border}`,
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        />
         <span style={{ color: color.muted, fontSize: 11 }}>Thickness</span>
         <input
           type="number"
@@ -267,6 +345,14 @@ function InteriorWallCard({ room, wall, actions, color }) {
           ×
         </button>
       </div>
+
+      {isColorOpen && (
+        <HexColorPicker
+          color={wallColorValue}
+          onChange={(c) => actions.updateInteriorWall(room.id, wall.id, { color: c })}
+          style={{ width: '100%' }}
+        />
+      )}
 
       <div style={{ display: 'flex', gap: 6 }}>
         <button onClick={() => actions.addInteriorDoor(room.id, wall.id)} style={addButtonStyle}>
@@ -324,8 +410,11 @@ export default function Sidebar() {
     rooms,
     selectedRoomId,
     selectRoom,
+    selectedBoundaryWallKey,
+    selectedInteriorWallId,
     updateRoomColor,
     updateRoom,
+    updateWallColor,
     addRoom,
     addFloor,
     removeRoom,
@@ -374,6 +463,15 @@ export default function Sidebar() {
   const availableWalls = selectedRoom ? WALL_KEYS.filter((key) => selectedRoom.walls[key]) : []
   const doorWall = availableWalls.includes(doorWallChoice) ? doorWallChoice : availableWalls[0]
   const windowWall = availableWalls.includes(windowWallChoice) ? windowWallChoice : availableWalls[0]
+
+  // a 3D-view wall click opens its colour picker here too
+  useEffect(() => {
+    if (selectedBoundaryWallKey) setColorTarget(`boundary:${selectedBoundaryWallKey}`)
+  }, [selectedBoundaryWallKey])
+
+  useEffect(() => {
+    if (selectedInteriorWallId) setColorTarget(`interior:${selectedInteriorWallId}`)
+  }, [selectedInteriorWallId])
 
   return (
     <div
@@ -545,6 +643,15 @@ export default function Sidebar() {
 
           <WallToggles room={selectedRoom} toggleWall={toggleWall} color={color} />
 
+          <WallColorSwatches
+            room={selectedRoom}
+            availableWalls={availableWalls}
+            updateWallColor={updateWallColor}
+            colorTarget={colorTarget}
+            setColorTarget={setColorTarget}
+            color={color}
+          />
+
           <OpeningList
             title="Doorways"
             items={selectedRoom.doors}
@@ -584,6 +691,8 @@ export default function Sidebar() {
                 room={selectedRoom}
                 wall={wall}
                 actions={interiorWallActions}
+                colorTarget={colorTarget}
+                setColorTarget={setColorTarget}
                 color={color}
               />
             ))}
