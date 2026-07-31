@@ -54,7 +54,15 @@
       "Bash(python3 -c \"import json; json.load\\(open\\('/Users/sarthikjena/Desktop/homevision/.claude/settings.local.json'\\)\\)\")",
       "Bash(rm -f /private/tmp/claude-501/-Users-sarthikjena-Desktop-homevision/01132903-4654-45a1-a7d0-7c72cef9fe5f/scratchpad/3d-*.png *)",
       "Bash(git check-ignore *)",
-      "Bash(grep -n \"WallToggles room=\\\\|InteriorWallCard$\\\\|<InteriorWallCard\" /Users/sarthikjena/Desktop/homevision/src/components/ui/Sidebar.jsx)"
+      "Bash(grep -n \"WallToggles room=\\\\|InteriorWallCard$\\\\|<InteriorWallCard\" /Users/sarthikjena/Desktop/homevision/src/components/ui/Sidebar.jsx)",
+      "Bash(npm ls *)",
+      "Bash(npm --version)",
+      "Bash(ps -p 4041 -o pid,ppid,command)",
+      "Read(//Applications/Google Chrome.app/**)",
+      "Read(//Applications/**)",
+      "Bash(find / -maxdepth 4 -iname \"*chrome*\" -path \"*ms-playwright*\")",
+      "Bash(find / -maxdepth 6 -iname \"playwright-core\" -type d)",
+      "Bash(npm init *)"
     ],
     "additionalDirectories": [
       "/tmp",

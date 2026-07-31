@@ -79,7 +79,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(() => buildSolidSegments(length, openings), [length, openings])
   const windowOpenings = openings.filter((o) => o.type === 'window')
@@ -90,6 +90,13 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
     onSelectWall(wallKind, wallKey)
   }
 
+  const handleDoubleClick = (e) => {
+    e.stopPropagation()
+    onClick(roomId)
+    onSelectWall(wallKind, wallKey)
+    onWallDoubleClick(roomId, wallKind, wallKey, e.nativeEvent)
+  }
+
   return (
     <group position={position} rotation={rotation}>
       {segments.map((seg, i) => (
@@ -97,6 +104,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
           key={i}
           position={[seg.x + seg.w / 2 - length / 2, seg.y + seg.h / 2, 0]}
           onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
         >
           <boxGeometry args={[seg.w, seg.h, thickness]} />
           <meshStandardMaterial color={color} />
@@ -108,6 +116,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
           key={`glass-${i}`}
           position={[(win.start + win.end) / 2 - length / 2, (win.bottom + win.top) / 2, 0]}
           onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
         >
           <boxGeometry args={[win.end - win.start, win.top - win.bottom, thickness * 0.4]} />
           <meshStandardMaterial color={glassColor} transparent opacity={0.35} />
@@ -117,7 +126,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, isSelected, onClick, onSelectWall }) {
+export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick }) {
   const darkMode = useHouseStore((s) => s.darkMode)
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
@@ -169,6 +178,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall }) {
             wallKey={w.key}
             onClick={onClick}
             onSelectWall={onSelectWall}
+            onWallDoubleClick={onWallDoubleClick}
             doors={doors.filter((d) => d.wall === w.key)}
             windows={windows.filter((win) => win.wall === w.key)}
           />
@@ -196,6 +206,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall }) {
             wallKey={wall.id}
             onClick={onClick}
             onSelectWall={onSelectWall}
+            onWallDoubleClick={onWallDoubleClick}
             doors={wall.doors ?? []}
             windows={wall.windows ?? []}
           />
