@@ -36,6 +36,23 @@ function computeOpenings(length, doors, windows) {
   return openings
 }
 
+// clips segments to [trimStart, length - trimEnd] so adjacent walls butt-join
+// instead of overlapping at the corner (overlapping opaque geometry z-fights,
+// which is invisible with matching wall colors but flickers when they differ)
+function clipSegments(segments, trimStart, trimEnd, length) {
+  const lo = trimStart
+  const hi = length - trimEnd
+  if (lo <= 0 && hi >= length) return segments
+  return segments
+    .map((seg) => {
+      const xa = Math.max(seg.x, lo)
+      const xb = Math.min(seg.x + seg.w, hi)
+      if (xb - xa < EPS) return null
+      return { ...seg, x: xa, w: xb - xa }
+    })
+    .filter(Boolean)
+}
+
 // splits a wall's length x height rectangle into solid boxes around the openings
 function buildSolidSegments(length, openings) {
   const bounds = new Set([0, length])
@@ -79,9 +96,12 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
-  const segments = useMemo(() => buildSolidSegments(length, openings), [length, openings])
+  const segments = useMemo(
+    () => clipSegments(buildSolidSegments(length, openings), trimStart, trimEnd, length),
+    [length, openings, trimStart, trimEnd]
+  )
   const windowOpenings = openings.filter((o) => o.type === 'window')
 
   const handleClick = (e) => {
@@ -138,11 +158,13 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const posX = x + width / 2
   const posZ = y + height / 2
 
+  // left/right walls are trimmed by the top/bottom walls' thickness at each end so
+  // their boxes butt-join at the corners instead of overlapping (see clipSegments)
   const wallDefs = [
     { key: 'bottom', length: width, position: [0, 0, height / 2 - WALL_INSET], rotation: [0, 0, 0] },
     { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, Math.PI, 0] },
-    { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, Math.PI / 2, 0] },
-    { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0] },
+    { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
+    { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
   ]
 
   return (
@@ -171,6 +193,8 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             length={w.length}
             position={w.position}
             rotation={w.rotation}
+            trimStart={w.trimStart}
+            trimEnd={w.trimEnd}
             color={(room.wallColors ?? {})[w.key] ?? wallColor}
             glassColor={palette.glass}
             roomId={room.id}

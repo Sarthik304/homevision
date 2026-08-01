@@ -62,7 +62,8 @@
       "Read(//Applications/**)",
       "Bash(find / -maxdepth 4 -iname \"*chrome*\" -path \"*ms-playwright*\")",
       "Bash(find / -maxdepth 6 -iname \"playwright-core\" -type d)",
-      "Bash(npm init *)"
+      "Bash(npm init *)",
+      "Bash(npx eslint *)"
     ],
     "additionalDirectories": [
       "/tmp",
