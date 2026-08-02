@@ -66,6 +66,43 @@ function getSnappedPosition(room, otherRooms, x, y) {
     }
   })
 
+  // corner-to-corner snapping: when a corner of the dragged room lands close to a corner of
+  // another room (no shared overlapping edge required, e.g. two rooms diagonal from each other),
+  // pull the dragged room so the two corners coincide exactly, keeping the shared walls straight.
+  const draggedCorners = [
+    { x, y },
+    { x: x + w, y },
+    { x, y: y + h },
+    { x: x + w, y: y + h },
+  ]
+  let bestCornerDist = SNAP_THRESHOLD
+  let cornerDelta = null
+
+  otherRooms.forEach((other) => {
+    const otherCorners = [
+      { x: other.x, y: other.y },
+      { x: other.x + other.width, y: other.y },
+      { x: other.x, y: other.y + other.height },
+      { x: other.x + other.width, y: other.y + other.height },
+    ]
+    draggedCorners.forEach((dc) => {
+      otherCorners.forEach((oc) => {
+        const dist = Math.hypot(dc.x - oc.x, dc.y - oc.y)
+        if (dist < bestCornerDist) {
+          bestCornerDist = dist
+          cornerDelta = { dx: oc.x - dc.x, dy: oc.y - dc.y }
+        }
+      })
+    })
+  })
+
+  if (cornerDelta) {
+    snappedX = x + cornerDelta.dx
+    snappedY = y + cornerDelta.dy
+    xSnapped = true
+    ySnapped = true
+  }
+
   return { x: snappedX, y: snappedY, xSnapped, ySnapped }
 }
 
