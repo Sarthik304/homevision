@@ -11,6 +11,40 @@ function mapWall(rooms, roomId, wallId, fn) {
   )
 }
 
+const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
+const ADJACENCY_TOLERANCE = 0.05 // meters — how close two rooms' boundary walls must sit to count as one shared wall
+
+// finds the neighboring room whose boundary wall sits flush against room's wallKey edge (e.g. two
+// rooms snapped side by side), so a door placed there can double as an opening in both walls
+function findAdjacentWall(rooms, room, wallKey) {
+  const otherWallKey = WALL_ADJACENCY[wallKey]
+  const other = rooms.find((r) => {
+    if (r.id === room.id) return false
+    if (!(r.walls ?? DEFAULT_WALLS)[otherWallKey]) return false
+    if (wallKey === 'right' || wallKey === 'left') {
+      const near = wallKey === 'right' ? room.x + room.width : room.x
+      const far = wallKey === 'right' ? r.x : r.x + r.width
+      if (Math.abs(near - far) > ADJACENCY_TOLERANCE) return false
+      return Math.min(room.y + room.height, r.y + r.height) - Math.max(room.y, r.y) > 0
+    }
+    const near = wallKey === 'bottom' ? room.y + room.height : room.y
+    const far = wallKey === 'bottom' ? r.y : r.y + r.height
+    if (Math.abs(near - far) > ADJACENCY_TOLERANCE) return false
+    return Math.min(room.x + room.width, r.x + r.width) - Math.max(room.x, r.x) > 0
+  })
+  return other ? { room: other, wallKey: otherWallKey } : null
+}
+
+// converts a door's offset (0-1 fraction along room's wallKey edge) into the equivalent offset
+// along otherRoom's wall, using the shared physical position where the two walls touch
+function mirrorOffset(room, wallKey, offset, otherRoom) {
+  const raw =
+    wallKey === 'top' || wallKey === 'bottom'
+      ? (room.x + offset * room.width - otherRoom.x) / otherRoom.width
+      : (room.y + offset * room.height - otherRoom.y) / otherRoom.height
+  return Math.min(1, Math.max(0, raw))
+}
+
 const useHouseStore = create((set) => ({
   rooms: [
     {
@@ -174,37 +208,73 @@ const useHouseStore = create((set) => ({
       ),
     })),
 
+  // placing a door on a wall that's flush against a neighboring room's wall (snapped side by
+  // side) also opens a matching door in that neighbor's wall, so it reads as one shared doorway
   addDoor: (roomId, wall) =>
-    set((state) => ({
-      rooms: state.rooms.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              doors: [...room.doors, { id: Date.now(), wall, offset: 0.5, width: 0.9 }],
+    set((state) => {
+      const room = state.rooms.find((r) => r.id === roomId)
+      if (!room) return {}
+      const id = Date.now()
+      const offset = 0.5
+      const width = 0.9
+      const adjacent = findAdjacentWall(state.rooms, room, wall)
+      return {
+        rooms: state.rooms.map((r) => {
+          if (r.id === roomId) return { ...r, doors: [...r.doors, { id, wall, offset, width }] }
+          if (adjacent && r.id === adjacent.room.id) {
+            return {
+              ...r,
+              doors: [
+                ...r.doors,
+                { id, wall: adjacent.wallKey, offset: mirrorOffset(room, wall, offset, r), width },
+              ],
             }
-          : room
-      ),
-    })),
+          }
+          return r
+        }),
+      }
+    }),
 
+  // keeps a shared doorway's other half (see addDoor) in sync when its offset/width is adjusted
   updateDoor: (roomId, doorId, updates) =>
-    set((state) => ({
-      rooms: state.rooms.map((room) =>
-        room.id === roomId
-          ? {
-              ...room,
-              doors: room.doors.map((d) => (d.id === doorId ? { ...d, ...updates } : d)),
+    set((state) => {
+      const room = state.rooms.find((r) => r.id === roomId)
+      const door = room?.doors.find((d) => d.id === doorId)
+      const adjacent = door ? findAdjacentWall(state.rooms, room, door.wall) : null
+      return {
+        rooms: state.rooms.map((r) => {
+          if (r.id === roomId) {
+            return { ...r, doors: r.doors.map((d) => (d.id === doorId ? { ...d, ...updates } : d)) }
+          }
+          if (adjacent && r.id === adjacent.room.id) {
+            return {
+              ...r,
+              doors: r.doors.map((d) =>
+                d.id === doorId
+                  ? {
+                      ...d,
+                      width: updates.width ?? d.width,
+                      offset:
+                        updates.offset !== undefined
+                          ? mirrorOffset(room, door.wall, updates.offset, r)
+                          : d.offset,
+                    }
+                  : d
+              ),
             }
-          : room
-      ),
-    })),
+          }
+          return r
+        }),
+      }
+    }),
 
+  // door ids are unique across the whole plan, so removing by id also clears a shared doorway's other half
   removeDoor: (roomId, doorId) =>
     set((state) => ({
-      rooms: state.rooms.map((room) =>
-        room.id === roomId
-          ? { ...room, doors: room.doors.filter((d) => d.id !== doorId) }
-          : room
-      ),
+      rooms: state.rooms.map((room) => ({
+        ...room,
+        doors: room.doors.filter((d) => d.id !== doorId),
+      })),
     })),
 
   addWindow: (roomId, wall) =>
