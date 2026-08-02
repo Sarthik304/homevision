@@ -718,7 +718,7 @@ export default function FloorPlanEditor() {
                   width={pixelW}
                   height={pixelH}
                   fill={room.floorColor}
-                  stroke={isSelected ? color.brand : 'transparent'}
+                  stroke={isSelected && !hasAnyWall ? color.brand : 'transparent'}
                   strokeWidth={1.5}
                   dash={hasAnyWall ? undefined : [5, 4]}
                 />

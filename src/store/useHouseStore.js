@@ -45,6 +45,28 @@ function mirrorOffset(room, wallKey, offset, otherRoom) {
   return Math.min(1, Math.max(0, raw))
 }
 
+// after `room`'s geometry changes (dragged or resized), re-aligns any shared doorway (see addDoor)
+// by pulling room's own door back onto the matching door of whichever neighbor is still adjacent —
+// the neighbor didn't move, so it stays the fixed reference; only the room that moved needs to
+// recompute its offset to keep sitting at the same physical spot on the shared wall
+function resyncSharedDoors(rooms, room) {
+  let changed = false
+  const doors = room.doors.map((d) => {
+    const adjacent = findAdjacentWall(rooms, room, d.wall)
+    if (!adjacent) return d
+    const partner = rooms.find((r) => r.id === adjacent.room.id)
+    const partnerDoor = partner?.doors.find((pd) => pd.id === d.id)
+    if (!partnerDoor) return d
+    changed = true
+    return {
+      ...d,
+      offset: mirrorOffset(partner, adjacent.wallKey, partnerDoor.offset, room),
+      width: partnerDoor.width,
+    }
+  })
+  return changed ? rooms.map((r) => (r.id === room.id ? { ...r, doors } : r)) : rooms
+}
+
 const useHouseStore = create((set) => ({
   rooms: [
     {
@@ -175,11 +197,13 @@ const useHouseStore = create((set) => ({
     }),
 
   updateRoom: (id, updates) =>
-    set((state) => ({
-      rooms: state.rooms.map((room) =>
-        room.id === id ? { ...room, ...updates } : room
-      ),
-    })),
+    set((state) => {
+      const rooms = state.rooms.map((room) => (room.id === id ? { ...room, ...updates } : room))
+      const geometryChanged = ['x', 'y', 'width', 'height'].some((key) => key in updates)
+      if (!geometryChanged) return { rooms }
+      const movedRoom = rooms.find((r) => r.id === id)
+      return { rooms: resyncSharedDoors(rooms, movedRoom) }
+    }),
 
   toggleWall: (roomId, wallKey) =>
     set((state) => ({
