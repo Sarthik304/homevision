@@ -50,8 +50,13 @@ const useHouseStore = create((set) => ({
   selectedBoundaryWallKey: null,
   activeView: '2d',
   darkMode: false,
+  // room-space point currently centered in the 2D viewport, kept in sync by FloorPlanEditor;
+  // new rooms/floors spawn here so they appear where the user is looking, not off in a corner
+  viewCenter: { x: 11, y: 5 },
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+
+  setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 
   // selecting a room clears any wall selection, and vice versa (see selectInteriorWall/selectBoundaryWall)
   selectRoom: (id) => set({ selectedRoomId: id, selectedInteriorWallId: null, selectedBoundaryWallKey: null }),
@@ -70,48 +75,56 @@ const useHouseStore = create((set) => ({
     })),
 
   addRoom: () =>
-    set((state) => ({
-      rooms: [
-        ...state.rooms,
-        {
-          id: Date.now(),
-          name: `Room ${state.rooms.length + 1}`,
-          x: 0,
-          y: 0,
-          width: 8,
-          height: 8,
-          wallColor: '#ffffff',
-          floorColor: '#d4c5a9',
-          walls: { ...DEFAULT_WALLS },
-          wallColors: {},
-          doors: [],
-          windows: [],
-          interiorWalls: [],
-        },
-      ],
-    })),
+    set((state) => {
+      const width = 8
+      const height = 8
+      return {
+        rooms: [
+          ...state.rooms,
+          {
+            id: Date.now(),
+            name: `Room ${state.rooms.length + 1}`,
+            x: state.viewCenter.x - width / 2,
+            y: state.viewCenter.y - height / 2,
+            width,
+            height,
+            wallColor: '#ffffff',
+            floorColor: '#d4c5a9',
+            walls: { ...DEFAULT_WALLS },
+            wallColors: {},
+            doors: [],
+            windows: [],
+            interiorWalls: [],
+          },
+        ],
+      }
+    }),
 
   addFloor: () =>
-    set((state) => ({
-      rooms: [
-        ...state.rooms,
-        {
-          id: Date.now(),
-          name: `Floor ${state.rooms.length + 1}`,
-          x: 0,
-          y: 0,
-          width: 8,
-          height: 8,
-          wallColor: '#ffffff',
-          floorColor: '#e2d6c1',
-          walls: { top: false, bottom: false, left: false, right: false },
-          wallColors: {},
-          doors: [],
-          windows: [],
-          interiorWalls: [],
-        },
-      ],
-    })),
+    set((state) => {
+      const width = 8
+      const height = 8
+      return {
+        rooms: [
+          ...state.rooms,
+          {
+            id: Date.now(),
+            name: `Floor ${state.rooms.length + 1}`,
+            x: state.viewCenter.x - width / 2,
+            y: state.viewCenter.y - height / 2,
+            width,
+            height,
+            wallColor: '#ffffff',
+            floorColor: '#e2d6c1',
+            walls: { top: false, bottom: false, left: false, right: false },
+            wallColors: {},
+            doors: [],
+            windows: [],
+            interiorWalls: [],
+          },
+        ],
+      }
+    }),
 
   removeRoom: (id) =>
     set((state) => {

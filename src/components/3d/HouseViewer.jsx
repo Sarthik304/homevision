@@ -58,6 +58,23 @@ export default function HouseViewer() {
     closeColorPicker()
   }
 
+  // rooms are stored in absolute 2D coordinates (which can drift far from the origin as the
+  // plan grows), so re-center the whole house on its bounding-box middle before rendering it,
+  // keeping it in the middle of the grid instead of off in a corner
+  const houseOffset = (() => {
+    if (rooms.length === 0) return [0, 0]
+    const bounds = rooms.reduce(
+      (acc, r) => ({
+        minX: Math.min(acc.minX, r.x),
+        maxX: Math.max(acc.maxX, r.x + r.width),
+        minY: Math.min(acc.minY, r.y),
+        maxY: Math.max(acc.maxY, r.y + r.height),
+      }),
+      { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+    )
+    return [-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2]
+  })()
+
   const activeRoom = colorPicker ? rooms.find((r) => r.id === colorPicker.roomId) : null
   const activeColor = activeRoom ? getWallColor(activeRoom, colorPicker.kind, colorPicker.key) : '#ffffff'
 
@@ -99,16 +116,18 @@ export default function HouseViewer() {
           sectionColor={color.gridSection}
         />
 
-        {rooms.map((room) => (
-          <Room3D
-            key={room.id}
-            room={room}
-            isSelected={room.id === selectedRoomId}
-            onClick={selectRoom}
-            onSelectWall={handleSelectWall}
-            onWallDoubleClick={handleWallDoubleClick}
-          />
-        ))}
+        <group position={[houseOffset[0], 0, houseOffset[1]]}>
+          {rooms.map((room) => (
+            <Room3D
+              key={room.id}
+              room={room}
+              isSelected={room.id === selectedRoomId}
+              onClick={selectRoom}
+              onSelectWall={handleSelectWall}
+              onWallDoubleClick={handleWallDoubleClick}
+            />
+          ))}
+        </group>
 
         <mesh
           position={[0, -0.1, 0]}

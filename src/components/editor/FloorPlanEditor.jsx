@@ -2,9 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Text, Group, Line, Circle } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, font, radius } from '../../theme'
+import { SCALE, PADDING } from '../../constants/floorPlan'
 
-const SCALE = 20
-const PADDING = 40
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const ZOOM_STEP = 1.15
@@ -394,12 +393,21 @@ export default function FloorPlanEditor() {
     selectInteriorWall,
     updateInteriorWall,
     darkMode,
+    setViewCenter,
   } = useHouseStore()
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
   const [stageScale, setStageScale] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
+
+  // keeps the store aware of what room-space point is currently centered on screen, so a newly
+  // added room can be placed right where the user is looking instead of always at a fixed spot
+  useEffect(() => {
+    const worldCenterX = (stageSize.width / 2 - stagePos.x) / stageScale
+    const worldCenterY = (stageSize.height / 2 - stagePos.y) / stageScale
+    setViewCenter((worldCenterX - PADDING) / SCALE, (worldCenterY - PADDING) / SCALE)
+  }, [stageSize, stageScale, stagePos, setViewCenter])
 
   useEffect(() => {
     const el = containerRef.current
