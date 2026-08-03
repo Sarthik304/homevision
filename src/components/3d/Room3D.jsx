@@ -114,13 +114,18 @@ function getLWallDefs(width, height, notchWidth, notchHeight) {
     const midX = (from.x + to.x) / 2 + nx * WALL_INSET
     const midY = (from.y + to.y) / 2 + ny * WALL_INSET
     const isVertical = Math.abs(dx) < EPS
+    // every corner here is convex (90°) except the one where notchV meets notchH — the L's single
+    // reflex (270°) corner. There, notchH is already full-length across it (as it is at every
+    // corner), but trimming notchV's end the same way every other vertical edge gets trimmed
+    // leaves a WALL_THICKNESS-square hole neither wall covers, since nothing else runs through
+    // that corner to fill in for it. So notchV alone skips the trim on that end.
     return {
       key,
       length,
       position: [midX - width / 2, 0, midY - height / 2],
       rotation: [0, Math.atan2(-dy, -dx), 0],
       trimStart: isVertical ? WALL_THICKNESS : 0,
-      trimEnd: isVertical ? WALL_THICKNESS : 0,
+      trimEnd: isVertical && key !== 'notchV' ? WALL_THICKNESS : 0,
     }
   })
 }
