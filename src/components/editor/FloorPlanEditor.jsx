@@ -35,6 +35,21 @@ function rotateAround(px, py, cx, cy, deg) {
   return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
 }
 
+// a room rotated by a multiple of 90° is still perfectly axis-aligned on screen — 90°/270° just
+// swap which of its own width/height reads as "wide" — so it can still snap edge-to-edge against
+// other rooms. Anything off that grid (45°, etc.) genuinely isn't a rectangle in screen space
+// anymore, so it's excluded entirely (returns null) rather than snapping against a fake box.
+function getRoomAABB(room) {
+  const rotation = (((room.rotation ?? 0) % 360) + 360) % 360
+  if (rotation % 90 !== 0) return null
+  const swapped = (rotation / 90) % 2 === 1
+  const width = swapped ? room.height : room.width
+  const height = swapped ? room.width : room.height
+  const cx = room.x + room.width / 2
+  const cy = room.y + room.height / 2
+  return { x: cx - width / 2, y: cy - height / 2, width, height }
+}
+
 function getSnappedPosition(room, otherRooms, x, y) {
   const w = room.width
   const h = room.height
@@ -510,40 +525,53 @@ export default function FloorPlanEditor() {
     return () => observer.disconnect()
   }, [])
 
-  // rooms with a nonzero rotation opt out of the axis-aligned snapping/adjacency system entirely
-  // (their own drag/resize, and everyone else's snapping against them) — see findAdjacentWall
+  // rooms rotated off the 90° grid (see getRoomAABB) opt out of axis-aligned snapping entirely —
+  // their own drag, and everyone else's snapping against them.
   // the room Group is positioned by its CENTER (x/y) with an offsetX/Y of half its size, so Konva
-  // rotates it around its middle — e.target.x()/y() during a drag report that center, so every
-  // read here needs -width/2,-height/2 to recover the top-left room.x/room.y convention used
-  // everywhere else, and every write back to e.target needs the +width/2,+height/2 to match
+  // rotates it around its middle — e.target.x()/y() during a drag report that center. Snapping
+  // itself works in terms of each room's AABB (which for a 90°/270° room has width/height
+  // swapped from its stored room.width/height), then converts back to the center for e.target
+  // and finally to the stored room.x/y (relative to the room's OWN, unswapped width/height).
   function handleDragMove(e, roomId) {
     // ignore drags bubbling up from a nested interior wall, only handle the room Group's own drag
     if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
-    if (!room || room.rotation) return
-    const rawX = (e.target.x() - PADDING) / SCALE - room.width / 2
-    const rawY = (e.target.y() - PADDING) / SCALE - room.height / 2
-    const others = rooms.filter((r) => r.id !== roomId && !r.rotation)
-    const snapped = getSnappedPosition(room, others, rawX, rawY)
-    e.target.x((snapped.x + room.width / 2) * SCALE + PADDING)
-    e.target.y((snapped.y + room.height / 2) * SCALE + PADDING)
+    if (!room) return
+    const selfAABB = getRoomAABB(room)
+    if (!selfAABB) return
+    const centerX = (e.target.x() - PADDING) / SCALE
+    const centerY = (e.target.y() - PADDING) / SCALE
+    const rawX = centerX - selfAABB.width / 2
+    const rawY = centerY - selfAABB.height / 2
+    const others = rooms.filter((r) => r.id !== roomId).map(getRoomAABB).filter(Boolean)
+    const snapped = getSnappedPosition(selfAABB, others, rawX, rawY)
+    e.target.x((snapped.x + selfAABB.width / 2) * SCALE + PADDING)
+    e.target.y((snapped.y + selfAABB.height / 2) * SCALE + PADDING)
   }
 
   function handleDragEnd(e, roomId) {
     if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return
-    const rawX = (e.target.x() - PADDING) / SCALE - room.width / 2
-    const rawY = (e.target.y() - PADDING) / SCALE - room.height / 2
-    if (room.rotation) {
+    const selfAABB = getRoomAABB(room)
+    if (!selfAABB) {
+      const rawX = (e.target.x() - PADDING) / SCALE - room.width / 2
+      const rawY = (e.target.y() - PADDING) / SCALE - room.height / 2
       updateRoom(roomId, { x: Math.round(rawX * 10) / 10, y: Math.round(rawY * 10) / 10 })
       return
     }
-    const others = rooms.filter((r) => r.id !== roomId && !r.rotation)
-    const snapped = getSnappedPosition(room, others, rawX, rawY)
-    const newX = snapped.xSnapped ? snapped.x : Math.round(snapped.x)
-    const newY = snapped.ySnapped ? snapped.y : Math.round(snapped.y)
-    updateRoom(roomId, { x: newX, y: newY })
+    const centerX = (e.target.x() - PADDING) / SCALE
+    const centerY = (e.target.y() - PADDING) / SCALE
+    const rawX = centerX - selfAABB.width / 2
+    const rawY = centerY - selfAABB.height / 2
+    const others = rooms.filter((r) => r.id !== roomId).map(getRoomAABB).filter(Boolean)
+    const snapped = getSnappedPosition(selfAABB, others, rawX, rawY)
+    const aabbX = snapped.xSnapped ? snapped.x : Math.round(snapped.x)
+    const aabbY = snapped.ySnapped ? snapped.y : Math.round(snapped.y)
+    updateRoom(roomId, {
+      x: aabbX + selfAABB.width / 2 - room.width / 2,
+      y: aabbY + selfAABB.height / 2 - room.height / 2,
+    })
   }
 
   function resizeRoomForEdge(e, roomId, edge) {
