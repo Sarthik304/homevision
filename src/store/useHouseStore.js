@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { DEFAULT_L_WALLS } from '../constants/lshape'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
@@ -15,11 +16,16 @@ const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 't
 const ADJACENCY_TOLERANCE = 0.05 // meters — how close two rooms' boundary walls must sit to count as one shared wall
 
 // finds the neighboring room whose boundary wall sits flush against room's wallKey edge (e.g. two
-// rooms snapped side by side), so a door placed there can double as an opening in both walls
+// rooms snapped side by side), so a door placed there can double as an opening in both walls.
+// L-shaped rooms sit out of this entirely — their notch walls have no compass opposite to mirror
+// onto, and an L's outer walls don't line up with mirrorOffset's rectangle-only math.
 function findAdjacentWall(rooms, room, wallKey) {
+  if (room.shape === 'L') return null
   const otherWallKey = WALL_ADJACENCY[wallKey]
+  if (!otherWallKey) return null
   const other = rooms.find((r) => {
     if (r.id === room.id) return false
+    if (r.shape === 'L') return false
     if (!(r.walls ?? DEFAULT_WALLS)[otherWallKey]) return false
     if (wallKey === 'right' || wallKey === 'left') {
       const near = wallKey === 'right' ? room.x + room.width : room.x
@@ -65,6 +71,30 @@ function resyncSharedDoors(rooms, room) {
     }
   })
   return changed ? rooms.map((r) => (r.id === room.id ? { ...r, doors } : r)) : rooms
+}
+
+// shared by addRoom/addFloor: both spawn an 8x8 box centered on the current viewport, differing
+// only in name prefix, floor tint, shape, and whether it starts with boundary walls already up
+function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape }) {
+  const width = 8
+  const height = 8
+  return {
+    id: Date.now(),
+    name: `${namePrefix} ${count + 1}`,
+    x: viewCenter.x - width / 2,
+    y: viewCenter.y - height / 2,
+    width,
+    height,
+    shape,
+    ...(shape === 'L' ? { notchWidth: width / 2, notchHeight: height / 2 } : {}),
+    wallColor: '#ffffff',
+    floorColor,
+    walls,
+    wallColors: {},
+    doors: [],
+    windows: [],
+    interiorWalls: [],
+  }
 }
 
 const useHouseStore = create((set) => ({
@@ -130,57 +160,29 @@ const useHouseStore = create((set) => ({
       ),
     })),
 
-  addRoom: () =>
-    set((state) => {
-      const width = 8
-      const height = 8
-      return {
-        rooms: [
-          ...state.rooms,
-          {
-            id: Date.now(),
-            name: `Room ${state.rooms.length + 1}`,
-            x: state.viewCenter.x - width / 2,
-            y: state.viewCenter.y - height / 2,
-            width,
-            height,
-            wallColor: '#ffffff',
-            floorColor: '#d4c5a9',
-            walls: { ...DEFAULT_WALLS },
-            wallColors: {},
-            doors: [],
-            windows: [],
-            interiorWalls: [],
-          },
-        ],
-      }
-    }),
+  addRoom: (shape = 'rect') =>
+    set((state) => ({
+      rooms: [
+        ...state.rooms,
+        createRoom('Room', state.rooms.length, state.viewCenter, {
+          floorColor: '#d4c5a9',
+          walls: shape === 'L' ? { ...DEFAULT_L_WALLS } : { ...DEFAULT_WALLS },
+          shape,
+        }),
+      ],
+    })),
 
   addFloor: () =>
-    set((state) => {
-      const width = 8
-      const height = 8
-      return {
-        rooms: [
-          ...state.rooms,
-          {
-            id: Date.now(),
-            name: `Floor ${state.rooms.length + 1}`,
-            x: state.viewCenter.x - width / 2,
-            y: state.viewCenter.y - height / 2,
-            width,
-            height,
-            wallColor: '#ffffff',
-            floorColor: '#e2d6c1',
-            walls: { top: false, bottom: false, left: false, right: false },
-            wallColors: {},
-            doors: [],
-            windows: [],
-            interiorWalls: [],
-          },
-        ],
-      }
-    }),
+    set((state) => ({
+      rooms: [
+        ...state.rooms,
+        createRoom('Floor', state.rooms.length, state.viewCenter, {
+          floorColor: '#e2d6c1',
+          walls: { top: false, bottom: false, left: false, right: false },
+          shape: 'rect',
+        }),
+      ],
+    })),
 
   removeRoom: (id) =>
     set((state) => {
@@ -199,7 +201,9 @@ const useHouseStore = create((set) => ({
   updateRoom: (id, updates) =>
     set((state) => {
       const rooms = state.rooms.map((room) => (room.id === id ? { ...room, ...updates } : room))
-      const geometryChanged = ['x', 'y', 'width', 'height'].some((key) => key in updates)
+      const geometryChanged = ['x', 'y', 'width', 'height', 'notchWidth', 'notchHeight'].some(
+        (key) => key in updates
+      )
       if (!geometryChanged) return { rooms }
       const movedRoom = rooms.find((r) => r.id === id)
       return { rooms: resyncSharedDoors(rooms, movedRoom) }

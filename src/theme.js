@@ -38,9 +38,6 @@ export function getColors(darkMode) {
   return darkMode ? darkColors : lightColors
 }
 
-// Backwards-compatible default palette.
-export const color = lightColors
-
 export const font =
   "'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
 

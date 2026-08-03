@@ -2,6 +2,8 @@ import { HexColorPicker } from 'react-colorful'
 import { useEffect, useState } from 'react'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
+import { MIN_ROOM_SIZE } from '../../constants/floorPlan'
+import { getWallKeys, MIN_NOTCH } from '../../constants/lshape'
 
 const getSectionHeader = (color) => ({
   fontSize: 11,
@@ -41,16 +43,23 @@ const getSecondaryButton = (color) => ({
   fontWeight: 700,
 })
 
-const WALL_LABELS = { top: 'Top', bottom: 'Bottom', left: 'Left', right: 'Right' }
-const WALL_KEYS = ['top', 'bottom', 'left', 'right']
+const WALL_LABELS = {
+  top: 'Top',
+  bottom: 'Bottom',
+  left: 'Left',
+  right: 'Right',
+  notchV: 'Notch (side)',
+  notchH: 'Notch (top)',
+}
 
 function WallToggles({ room, toggleWall, color }) {
   const fieldLabel = getFieldLabel(color)
+  const wallKeys = getWallKeys(room)
   return (
     <div>
       <label style={fieldLabel}>Walls</label>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-        {WALL_KEYS.map((key) => {
+        {wallKeys.map((key) => {
           const present = room.walls[key]
           return (
             <button
@@ -458,9 +467,10 @@ export default function Sidebar() {
   const [hoveredRoomId, setHoveredRoomId] = useState(null)
   const [doorWallChoice, setDoorWallChoice] = useState('top')
   const [windowWallChoice, setWindowWallChoice] = useState('top')
+  const [newRoomShape, setNewRoomShape] = useState('rect')
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
-  const availableWalls = selectedRoom ? WALL_KEYS.filter((key) => selectedRoom.walls[key]) : []
+  const availableWalls = selectedRoom ? getWallKeys(selectedRoom).filter((key) => selectedRoom.walls[key]) : []
   const doorWall = availableWalls.includes(doorWallChoice) ? doorWallChoice : availableWalls[0]
   const windowWall = availableWalls.includes(windowWallChoice) ? windowWallChoice : availableWalls[0]
 
@@ -540,8 +550,38 @@ export default function Sidebar() {
           )
         })}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-          <button onClick={addRoom} style={secondaryButton}>
+        <div style={{ marginTop: 12 }}>
+          <label style={{ ...fieldLabel, marginBottom: 6 }}>Room shape</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {[
+              { key: 'rect', label: 'Rectangle' },
+              { key: 'L', label: 'L shape' },
+            ].map(({ key, label }) => {
+              const active = newRoomShape === key
+              return (
+                <button
+                  key={key}
+                  onClick={() => setNewRoomShape(key)}
+                  style={{
+                    padding: '7px 0',
+                    borderRadius: radius.sm,
+                    border: `1px solid ${active ? color.brand : color.border}`,
+                    background: active ? color.brandTint : color.bg,
+                    color: active ? color.brand : color.muted,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          <button onClick={() => addRoom(newRoomShape)} style={secondaryButton}>
             + Add room
           </button>
           <button onClick={addFloor} style={secondaryButton}>
@@ -628,16 +668,46 @@ export default function Sidebar() {
                 <input
                   type="number"
                   value={selectedRoom[dim]}
-                  min={0.1}
+                  min={MIN_ROOM_SIZE}
                   step={0.1}
                   onChange={(e) =>
-                    updateRoom(selectedRoom.id, { [dim]: parseFloat(e.target.value) || 0.1 })
+                    updateRoom(selectedRoom.id, {
+                      [dim]: Math.max(MIN_ROOM_SIZE, parseFloat(e.target.value) || MIN_ROOM_SIZE),
+                    })
                   }
                   style={inputStyle}
                 />
               </div>
             ))}
           </div>
+
+          {selectedRoom.shape === 'L' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {['notchWidth', 'notchHeight'].map((dim) => {
+                const cap = (dim === 'notchWidth' ? selectedRoom.width : selectedRoom.height) - MIN_ROOM_SIZE
+                return (
+                  <div key={dim}>
+                    <label style={fieldLabel}>
+                      {dim === 'notchWidth' ? 'Notch width (m)' : 'Notch depth (m)'}
+                    </label>
+                    <input
+                      type="number"
+                      value={selectedRoom[dim]}
+                      min={MIN_NOTCH}
+                      max={cap}
+                      step={0.1}
+                      onChange={(e) =>
+                        updateRoom(selectedRoom.id, {
+                          [dim]: Math.min(cap, Math.max(MIN_NOTCH, parseFloat(e.target.value) || MIN_NOTCH)),
+                        })
+                      }
+                      style={inputStyle}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           <div style={{ height: 1, background: color.border }} />
 

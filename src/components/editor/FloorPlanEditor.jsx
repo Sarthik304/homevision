@@ -2,14 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Text, Group, Line, Circle } from 'react-konva'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, font, radius } from '../../theme'
-import { SCALE, PADDING } from '../../constants/floorPlan'
+import { SCALE, PADDING, MIN_ROOM_SIZE } from '../../constants/floorPlan'
+import { getLEdges, getLPolygon, MIN_NOTCH, L_WALL_KEYS, DEFAULT_L_WALLS } from '../../constants/lshape'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const ZOOM_STEP = 1.15
-const MIN_ROOM_SIZE = 1 // meters — smallest a room can be shrunk to via edge resize
 const HANDLE_SIZE = 9 // px, screen size of an edge resize handle
 const EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', left: 'ew-resize', right: 'ew-resize' }
+const L_EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', notchH: 'ns-resize', left: 'ew-resize', right: 'ew-resize', notchV: 'ew-resize' }
 const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
 const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
 const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — endpoint snap distance to 45° angle increments
@@ -191,6 +192,81 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
+// same rendering as RoomWalls, generalized to an L-shaped room's 6 edges (see constants/lshape) —
+// walks each edge's own direction/normal instead of relying on the fixed top/bottom/left/right cases
+function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color }) {
+  const walls = room.walls ?? DEFAULT_L_WALLS
+  const doors = room.doors ?? []
+  const windows = room.windows ?? []
+  const edges = getLEdges(pixelW, pixelH, pixelNW, pixelNH)
+
+  return edges.filter((edge) => walls[edge.key]).map((edge) => {
+    const dx = edge.to.x - edge.from.x
+    const dy = edge.to.y - edge.from.y
+    const lengthPx = Math.hypot(dx, dy)
+    const ux = dx / lengthPx
+    const uy = dy / lengthPx
+    const nx = -uy
+    const ny = ux
+    const toPoint = (t) => [edge.from.x + ux * t, edge.from.y + uy * t]
+
+    const wallDoors = doors.filter((d) => d.wall === edge.key)
+    const wallWindows = windows.filter((w) => w.wall === edge.key)
+    const solids = solidWallStretches(lengthPx, wallDoors)
+
+    return (
+      <Group key={edge.key}>
+        {solids.map(([s, e2], i) => {
+          const [sx, sy] = toPoint(s)
+          const [ex, ey] = toPoint(e2)
+          return (
+            <Line
+              key={`wall-${i}`}
+              points={[sx, sy, ex, ey]}
+              stroke={isSelected ? color.brand : color.text}
+              strokeWidth={isSelected ? 3.5 : 2.5}
+              lineCap="square"
+            />
+          )
+        })}
+
+        {wallWindows.map((win) => {
+          const w = Math.min(win.width * SCALE, lengthPx)
+          const start = Math.max(0, win.offset * lengthPx - w / 2)
+          const end = Math.min(lengthPx, start + w)
+          const [sx, sy] = toPoint(start)
+          const [ex, ey] = toPoint(end)
+          return (
+            <Line
+              key={win.id}
+              points={[sx, sy, ex, ey]}
+              stroke={color.window}
+              strokeWidth={5}
+              lineCap="square"
+            />
+          )
+        })}
+
+        {wallDoors.map((d) => {
+          const w = Math.min(d.width * SCALE, lengthPx)
+          const start = Math.max(0, d.offset * lengthPx - w / 2)
+          const mid = start + w / 2
+          const [cx, cy] = toPoint(mid)
+          return (
+            <Line
+              key={d.id}
+              points={[cx, cy, cx + nx * w * 0.7, cy + ny * w * 0.7]}
+              stroke={color.muted}
+              strokeWidth={1.5}
+              dash={[3, 3]}
+            />
+          )
+        })}
+      </Group>
+    )
+  })
+}
+
 // interior partition walls: freeform two-endpoint walls, not tied to a room's 4 boundary edges
 function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, onBodyEnd, onEndpointMove, onEndpointEnd }) {
   const wallsList = room.interiorWalls ?? []
@@ -325,19 +401,13 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, 
   })
 }
 
-function ResizeHandle({ room, edge, pixelX, pixelY, pixelW, pixelH, color, onResizeMove, onResizeEnd }) {
-  const positions = {
-    top: [pixelX + pixelW / 2, pixelY],
-    bottom: [pixelX + pixelW / 2, pixelY + pixelH],
-    left: [pixelX, pixelY + pixelH / 2],
-    right: [pixelX + pixelW, pixelY + pixelH / 2],
-  }
-  const [hx, hy] = positions[edge]
-
+// x/y is the handle's target midpoint in stage-pixel space; positioning math lives with each
+// caller (rectangle vs L-shape edges compute their midpoints differently) so this stays a dumb node
+function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResizeEnd }) {
   return (
     <Rect
-      x={hx - HANDLE_SIZE / 2}
-      y={hy - HANDLE_SIZE / 2}
+      x={x - HANDLE_SIZE / 2}
+      y={y - HANDLE_SIZE / 2}
       width={HANDLE_SIZE}
       height={HANDLE_SIZE}
       fill={color.bg}
@@ -346,16 +416,23 @@ function ResizeHandle({ room, edge, pixelX, pixelY, pixelW, pixelH, color, onRes
       cornerRadius={2}
       draggable
       hitStrokeWidth={16}
-      onDragMove={(e) => onResizeMove(e, room.id, edge)}
-      onDragEnd={(e) => onResizeEnd(e, room.id, edge)}
+      onDragMove={(e) => onResizeMove(e, roomId, edge)}
+      onDragEnd={(e) => onResizeEnd(e, roomId, edge)}
       onMouseEnter={(e) => {
-        e.target.getStage().container().style.cursor = EDGE_CURSORS[edge]
+        e.target.getStage().container().style.cursor = cursor
       }}
       onMouseLeave={(e) => {
         e.target.getStage().container().style.cursor = 'default'
       }}
     />
   )
+}
+
+// midpoint (in whatever unit pixelW/pixelH/pixelNW/pixelNH are given, offset by pixelX/pixelY) of
+// one of an L-shaped room's 6 edges — shared by the resize handles and the drag-resize math itself
+function lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edgeKey) {
+  const edge = getLEdges(pixelW, pixelH, pixelNW, pixelNH).find((e) => e.key === edgeKey)
+  return [pixelX + (edge.from.x + edge.to.x) / 2, pixelY + (edge.from.y + edge.to.y) / 2]
 }
 
 function ZoomButton({ children, onClick, title, color }) {
@@ -499,6 +576,68 @@ export default function FloorPlanEditor() {
       y: Math.round(rect.y * 10) / 10,
       width: Math.round(rect.width * 10) / 10,
       height: Math.round(rect.height * 10) / 10,
+    })
+  }
+
+  // same idea as resizeRoomForEdge, but for an L-shaped room's 6 edges: the 4 outer edges
+  // (top/bottom/left/right) resize the bounding box exactly like a rectangle's, while the two
+  // notch edges (notchV/notchH) instead grow or shrink how deep the notch cuts into that box.
+  // Each outer edge is clamped to leave room for the notch, and vice versa, so the L never inverts.
+  function resizeLRoomForEdge(e, roomId, edge) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return null
+
+    const pointerX = (e.target.x() + HANDLE_SIZE / 2 - PADDING) / SCALE
+    const pointerY = (e.target.y() + HANDLE_SIZE / 2 - PADDING) / SCALE
+
+    let { x, y, width, height, notchWidth, notchHeight } = room
+
+    if (edge === 'top') {
+      const minHeight = MIN_ROOM_SIZE + notchHeight
+      const newY = Math.min(pointerY, room.y + room.height - minHeight)
+      height = room.y + room.height - newY
+      y = newY
+    } else if (edge === 'bottom') {
+      height = Math.max(MIN_ROOM_SIZE + notchHeight, pointerY - room.y)
+    } else if (edge === 'left') {
+      const minWidth = MIN_ROOM_SIZE + notchWidth
+      const newX = Math.min(pointerX, room.x + room.width - minWidth)
+      width = room.x + room.width - newX
+      x = newX
+    } else if (edge === 'right') {
+      width = Math.max(MIN_ROOM_SIZE + notchWidth, pointerX - room.x)
+    } else if (edge === 'notchV') {
+      const localX = pointerX - room.x
+      notchWidth = Math.min(width - MIN_ROOM_SIZE, Math.max(MIN_NOTCH, width - localX))
+    } else if (edge === 'notchH') {
+      const localY = pointerY - room.y
+      notchHeight = Math.min(height - MIN_ROOM_SIZE, Math.max(MIN_NOTCH, localY))
+    }
+
+    const pixelX = x * SCALE + PADDING
+    const pixelY = y * SCALE + PADDING
+    const [hx, hy] = lEdgeMidpoint(pixelX, pixelY, width * SCALE, height * SCALE, notchWidth * SCALE, notchHeight * SCALE, edge)
+    e.target.x(hx - HANDLE_SIZE / 2)
+    e.target.y(hy - HANDLE_SIZE / 2)
+
+    return { x, y, width, height, notchWidth, notchHeight }
+  }
+
+  function handleLResizeMove(e, roomId, edge) {
+    const rect = resizeLRoomForEdge(e, roomId, edge)
+    if (rect) updateRoom(roomId, rect)
+  }
+
+  function handleLResizeEnd(e, roomId, edge) {
+    const rect = resizeLRoomForEdge(e, roomId, edge)
+    if (!rect) return
+    updateRoom(roomId, {
+      x: Math.round(rect.x * 10) / 10,
+      y: Math.round(rect.y * 10) / 10,
+      width: Math.round(rect.width * 10) / 10,
+      height: Math.round(rect.height * 10) / 10,
+      notchWidth: Math.round(rect.notchWidth * 10) / 10,
+      notchHeight: Math.round(rect.notchHeight * 10) / 10,
     })
   }
 
@@ -702,6 +841,9 @@ export default function FloorPlanEditor() {
             const pixelY = room.y * SCALE + PADDING
             const pixelW = room.width * SCALE
             const pixelH = room.height * SCALE
+            const isL = room.shape === 'L'
+            const pixelNW = isL ? room.notchWidth * SCALE : 0
+            const pixelNH = isL ? room.notchHeight * SCALE : 0
             const hasAnyWall = Object.values(room.walls ?? DEFAULT_WALLS).some(Boolean)
 
             return (
@@ -714,16 +856,39 @@ export default function FloorPlanEditor() {
                 onDragEnd={(e) => handleDragEnd(e, room.id)}
                 onClick={() => selectRoom(room.id)}
               >
-                <Rect
-                  width={pixelW}
-                  height={pixelH}
-                  fill={room.floorColor}
-                  stroke={isSelected && !hasAnyWall ? color.brand : 'transparent'}
-                  strokeWidth={1.5}
-                  dash={hasAnyWall ? undefined : [5, 4]}
-                />
+                {isL ? (
+                  <Line
+                    points={getLPolygon(pixelW, pixelH, pixelNW, pixelNH).flatMap((p) => [p.x, p.y])}
+                    closed
+                    fill={room.floorColor}
+                    stroke={isSelected && !hasAnyWall ? color.brand : 'transparent'}
+                    strokeWidth={1.5}
+                    dash={hasAnyWall ? undefined : [5, 4]}
+                  />
+                ) : (
+                  <Rect
+                    width={pixelW}
+                    height={pixelH}
+                    fill={room.floorColor}
+                    stroke={isSelected && !hasAnyWall ? color.brand : 'transparent'}
+                    strokeWidth={1.5}
+                    dash={hasAnyWall ? undefined : [5, 4]}
+                  />
+                )}
 
-                <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
+                {isL ? (
+                  <LRoomWalls
+                    room={room}
+                    pixelW={pixelW}
+                    pixelH={pixelH}
+                    pixelNW={pixelNW}
+                    pixelNH={pixelNH}
+                    isSelected={isSelected}
+                    color={color}
+                  />
+                ) : (
+                  <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
+                )}
 
                 <InteriorWalls
                   room={room}
@@ -770,20 +935,50 @@ export default function FloorPlanEditor() {
               const pixelY = room.y * SCALE + PADDING
               const pixelW = room.width * SCALE
               const pixelH = room.height * SCALE
-              return WALL_KEYS.map((edge) => (
-                <ResizeHandle
-                  key={`${room.id}-${edge}`}
-                  room={room}
-                  edge={edge}
-                  pixelX={pixelX}
-                  pixelY={pixelY}
-                  pixelW={pixelW}
-                  pixelH={pixelH}
-                  color={color}
-                  onResizeMove={handleResizeMove}
-                  onResizeEnd={handleResizeEnd}
-                />
-              ))
+
+              if (room.shape === 'L') {
+                const pixelNW = room.notchWidth * SCALE
+                const pixelNH = room.notchHeight * SCALE
+                return L_WALL_KEYS.map((edge) => {
+                  const [hx, hy] = lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edge)
+                  return (
+                    <ResizeHandle
+                      key={`${room.id}-${edge}`}
+                      roomId={room.id}
+                      edge={edge}
+                      x={hx}
+                      y={hy}
+                      cursor={L_EDGE_CURSORS[edge]}
+                      color={color}
+                      onResizeMove={handleLResizeMove}
+                      onResizeEnd={handleLResizeEnd}
+                    />
+                  )
+                })
+              }
+
+              const positions = {
+                top: [pixelX + pixelW / 2, pixelY],
+                bottom: [pixelX + pixelW / 2, pixelY + pixelH],
+                left: [pixelX, pixelY + pixelH / 2],
+                right: [pixelX + pixelW, pixelY + pixelH / 2],
+              }
+              return WALL_KEYS.map((edge) => {
+                const [hx, hy] = positions[edge]
+                return (
+                  <ResizeHandle
+                    key={`${room.id}-${edge}`}
+                    roomId={room.id}
+                    edge={edge}
+                    x={hx}
+                    y={hy}
+                    cursor={EDGE_CURSORS[edge]}
+                    color={color}
+                    onResizeMove={handleResizeMove}
+                    onResizeEnd={handleResizeEnd}
+                  />
+                )
+              })
             })}
         </Layer>
       </Stage>

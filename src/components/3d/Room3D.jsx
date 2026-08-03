@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
+import { Shape } from 'three'
 import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
+import { getLEdges, getLPolygon } from '../../constants/lshape'
 
 const WALL_HEIGHT = 3
 const WALL_THICKNESS = 0.1
@@ -96,6 +98,49 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
+// derives the same {length, position, rotation, trimStart, trimEnd} shape the 4 hardcoded rect
+// wallDefs use below, but generically from an L-shaped room's 6 edges (see constants/lshape).
+// The formulas were reverse-engineered from the rect case and verified to reproduce it exactly:
+// inset the edge's centerline inward by WALL_INSET (so its outer face sits on the true boundary),
+// derive rotation from the edge direction, and trim only the "vertical" (x-constant) edges by a
+// wall thickness at both ends so they tuck behind the "horizontal" edges at each corner.
+function getLWallDefs(width, height, notchWidth, notchHeight) {
+  return getLEdges(width, height, notchWidth, notchHeight).map(({ key, from, to }) => {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const length = Math.hypot(dx, dy)
+    const nx = -dy / length
+    const ny = dx / length
+    const midX = (from.x + to.x) / 2 + nx * WALL_INSET
+    const midY = (from.y + to.y) / 2 + ny * WALL_INSET
+    const isVertical = Math.abs(dx) < EPS
+    return {
+      key,
+      length,
+      position: [midX - width / 2, 0, midY - height / 2],
+      rotation: [0, Math.atan2(-dy, -dx), 0],
+      trimStart: isVertical ? WALL_THICKNESS : 0,
+      trimEnd: isVertical ? WALL_THICKNESS : 0,
+    }
+  })
+}
+
+// flat L-shaped mesh for the floor/ceiling. `flipY` accounts for the floor and ceiling using
+// opposite X rotations to face the right way, which mirrors how a plane's local Y axis ends up
+// mapped onto world Z — see the floor/ceiling meshes below for the matching rotation each expects.
+function buildLShape(width, height, notchWidth, notchHeight, flipY) {
+  const points = getLPolygon(width, height, notchWidth, notchHeight)
+  const shape = new Shape()
+  points.forEach(({ x, y }, i) => {
+    const sx = x - width / 2
+    const sy = flipY ? height / 2 - y : y - height / 2
+    if (i === 0) shape.moveTo(sx, sy)
+    else shape.lineTo(sx, sy)
+  })
+  shape.closePath()
+  return shape
+}
+
 function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(
@@ -150,6 +195,9 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const darkMode = useHouseStore((s) => s.darkMode)
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
+  const isL = room.shape === 'L'
+  const notchWidth = isL ? room.notchWidth : 0
+  const notchHeight = isL ? room.notchHeight : 0
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
   const windows = room.windows ?? []
@@ -158,14 +206,25 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const posX = x + width / 2
   const posZ = y + height / 2
 
+  const floorShape = useMemo(
+    () => (isL ? buildLShape(width, height, notchWidth, notchHeight, true) : null),
+    [isL, width, height, notchWidth, notchHeight]
+  )
+  const ceilingShape = useMemo(
+    () => (isL ? buildLShape(width, height, notchWidth, notchHeight, false) : null),
+    [isL, width, height, notchWidth, notchHeight]
+  )
+
   // left/right walls are trimmed by the top/bottom walls' thickness at each end so
   // their boxes butt-join at the corners instead of overlapping (see clipSegments)
-  const wallDefs = [
-    { key: 'bottom', length: width, position: [0, 0, height / 2 - WALL_INSET], rotation: [0, 0, 0] },
-    { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, Math.PI, 0] },
-    { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
-    { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
-  ]
+  const wallDefs = isL
+    ? getLWallDefs(width, height, notchWidth, notchHeight)
+    : [
+        { key: 'bottom', length: width, position: [0, 0, height / 2 - WALL_INSET], rotation: [0, 0, 0] },
+        { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, Math.PI, 0] },
+        { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
+        { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
+      ]
 
   return (
     <group position={[posX, 0, posZ]}>
@@ -174,13 +233,13 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
         rotation={[-Math.PI / 2, 0, 0]}
         onClick={(e) => { e.stopPropagation(); onClick(room.id) }}
       >
-        <planeGeometry args={[width, height]} />
+        {isL ? <shapeGeometry args={[floorShape]} /> : <planeGeometry args={[width, height]} />}
         <meshStandardMaterial color={floorColor} />
       </mesh>
 
       {anyWalls && (
         <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[width, height]} />
+          {isL ? <shapeGeometry args={[ceilingShape]} /> : <planeGeometry args={[width, height]} />}
           <meshStandardMaterial color={palette.ceiling} />
         </mesh>
       )}
