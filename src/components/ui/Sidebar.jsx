@@ -709,6 +709,24 @@ export default function Sidebar() {
             </div>
           )}
 
+          <div>
+            <label style={fieldLabel}>Rotation (°)</label>
+            <input
+              type="number"
+              value={selectedRoom.rotation ?? 0}
+              step={45}
+              onChange={(e) => {
+                const raw = parseFloat(e.target.value)
+                const normalized = ((raw % 360) + 360) % 360
+                updateRoom(selectedRoom.id, { rotation: Number.isFinite(raw) ? normalized : 0 })
+              }}
+              style={inputStyle}
+            />
+            <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
+              Or drag the handle above a selected room in the 2D view — it clicks into 45° steps.
+            </div>
+          </div>
+
           <div style={{ height: 1, background: color.border }} />
 
           <WallToggles room={selectedRoom} toggleWall={toggleWall} color={color} />

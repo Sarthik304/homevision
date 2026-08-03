@@ -227,7 +227,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
       ]
 
   return (
-    <group position={[posX, 0, posZ]}>
+    <group position={[posX, 0, posZ]} rotation={[0, -((room.rotation ?? 0) * Math.PI) / 180, 0]}>
       <mesh
         position={[0, 0, 0]}
         rotation={[-Math.PI / 2, 0, 0]}

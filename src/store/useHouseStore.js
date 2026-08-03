@@ -17,15 +17,15 @@ const ADJACENCY_TOLERANCE = 0.05 // meters — how close two rooms' boundary wal
 
 // finds the neighboring room whose boundary wall sits flush against room's wallKey edge (e.g. two
 // rooms snapped side by side), so a door placed there can double as an opening in both walls.
-// L-shaped rooms sit out of this entirely — their notch walls have no compass opposite to mirror
-// onto, and an L's outer walls don't line up with mirrorOffset's rectangle-only math.
+// L-shaped and rotated rooms sit out of this entirely — an L's outer walls don't line up with
+// mirrorOffset's rectangle-only math, and a rotated room's walls aren't axis-aligned at all.
 function findAdjacentWall(rooms, room, wallKey) {
-  if (room.shape === 'L') return null
+  if (room.shape === 'L' || room.rotation) return null
   const otherWallKey = WALL_ADJACENCY[wallKey]
   if (!otherWallKey) return null
   const other = rooms.find((r) => {
     if (r.id === room.id) return false
-    if (r.shape === 'L') return false
+    if (r.shape === 'L' || r.rotation) return false
     if (!(r.walls ?? DEFAULT_WALLS)[otherWallKey]) return false
     if (wallKey === 'right' || wallKey === 'left') {
       const near = wallKey === 'right' ? room.x + room.width : room.x
@@ -86,6 +86,7 @@ function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape })
     width,
     height,
     shape,
+    rotation: 0,
     ...(shape === 'L' ? { notchWidth: width / 2, notchHeight: height / 2 } : {}),
     wallColor: '#ffffff',
     floorColor,
@@ -201,7 +202,7 @@ const useHouseStore = create((set) => ({
   updateRoom: (id, updates) =>
     set((state) => {
       const rooms = state.rooms.map((room) => (room.id === id ? { ...room, ...updates } : room))
-      const geometryChanged = ['x', 'y', 'width', 'height', 'notchWidth', 'notchHeight'].some(
+      const geometryChanged = ['x', 'y', 'width', 'height', 'notchWidth', 'notchHeight', 'rotation'].some(
         (key) => key in updates
       )
       if (!geometryChanged) return { rooms }

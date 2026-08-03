@@ -13,13 +13,27 @@ const EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', left: 'ew-resize',
 const L_EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', notchH: 'ns-resize', left: 'ew-resize', right: 'ew-resize', notchV: 'ew-resize' }
 const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
 const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
-const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — endpoint snap distance to 45° angle increments
+const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — angle-snap distance, shared by interior wall endpoints and room rotation
 const INTERIOR_HANDLE_RADIUS = 7 // px — endpoint handle for rotating/stretching an interior wall
+const ROTATE_SNAP_DEG = 45 // degrees — increment a room's rotation handle "clicks" into
+const ROTATE_HANDLE_DIST = 24 // px above the room's (unrotated) top edge where its rotation handle sits
+const ROTATE_HANDLE_RADIUS = 6 // px
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
 const SNAP_THRESHOLD = 0.6 // meters — how close an edge has to get before it snaps flush
 
+
+// rotates point (px,py) by `deg` around (cx,cy); positive deg is clockwise, matching both Konva's
+// `rotation` prop and the angle convention computeRoomRotation below derives from the pointer
+function rotateAround(px, py, cx, cy, deg) {
+  const rad = (deg * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const dx = px - cx
+  const dy = py - cy
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
+}
 
 function getSnappedPosition(room, otherRooms, x, y) {
   const w = room.width
@@ -496,39 +510,54 @@ export default function FloorPlanEditor() {
     return () => observer.disconnect()
   }, [])
 
+  // rooms with a nonzero rotation opt out of the axis-aligned snapping/adjacency system entirely
+  // (their own drag/resize, and everyone else's snapping against them) — see findAdjacentWall
+  // the room Group is positioned by its CENTER (x/y) with an offsetX/Y of half its size, so Konva
+  // rotates it around its middle — e.target.x()/y() during a drag report that center, so every
+  // read here needs -width/2,-height/2 to recover the top-left room.x/room.y convention used
+  // everywhere else, and every write back to e.target needs the +width/2,+height/2 to match
   function handleDragMove(e, roomId) {
     // ignore drags bubbling up from a nested interior wall, only handle the room Group's own drag
     if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
-    if (!room) return
-    const rawX = (e.target.x() - PADDING) / SCALE
-    const rawY = (e.target.y() - PADDING) / SCALE
-    const others = rooms.filter((r) => r.id !== roomId)
+    if (!room || room.rotation) return
+    const rawX = (e.target.x() - PADDING) / SCALE - room.width / 2
+    const rawY = (e.target.y() - PADDING) / SCALE - room.height / 2
+    const others = rooms.filter((r) => r.id !== roomId && !r.rotation)
     const snapped = getSnappedPosition(room, others, rawX, rawY)
-    e.target.x(snapped.x * SCALE + PADDING)
-    e.target.y(snapped.y * SCALE + PADDING)
+    e.target.x((snapped.x + room.width / 2) * SCALE + PADDING)
+    e.target.y((snapped.y + room.height / 2) * SCALE + PADDING)
   }
 
   function handleDragEnd(e, roomId) {
     if (e.target !== e.currentTarget) return
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return
-    const rawX = (e.target.x() - PADDING) / SCALE
-    const rawY = (e.target.y() - PADDING) / SCALE
-    const others = rooms.filter((r) => r.id !== roomId)
+    const rawX = (e.target.x() - PADDING) / SCALE - room.width / 2
+    const rawY = (e.target.y() - PADDING) / SCALE - room.height / 2
+    if (room.rotation) {
+      updateRoom(roomId, { x: Math.round(rawX * 10) / 10, y: Math.round(rawY * 10) / 10 })
+      return
+    }
+    const others = rooms.filter((r) => r.id !== roomId && !r.rotation)
     const snapped = getSnappedPosition(room, others, rawX, rawY)
     const newX = snapped.xSnapped ? snapped.x : Math.round(snapped.x)
     const newY = snapped.ySnapped ? snapped.y : Math.round(snapped.y)
     updateRoom(roomId, { x: newX, y: newY })
   }
 
-  
   function resizeRoomForEdge(e, roomId, edge) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
 
-    const pointerX = (e.target.x() + HANDLE_SIZE / 2 - PADDING) / SCALE
-    const pointerY = (e.target.y() + HANDLE_SIZE / 2 - PADDING) / SCALE
+    const rotation = room.rotation ?? 0
+    const centerX = (room.x + room.width / 2) * SCALE + PADDING
+    const centerY = (room.y + room.height / 2) * SCALE + PADDING
+    const rawHandle = { x: e.target.x() + HANDLE_SIZE / 2, y: e.target.y() + HANDLE_SIZE / 2 }
+    // undo the room's own rotation so the rest of the math can pretend it's axis-aligned
+    const local = rotation ? rotateAround(rawHandle.x, rawHandle.y, centerX, centerY, -rotation) : rawHandle
+    const pointerX = (local.x - PADDING) / SCALE
+    const pointerY = (local.y - PADDING) / SCALE
 
     let { x, y, width, height } = room
 
@@ -556,7 +585,14 @@ export default function FloorPlanEditor() {
       left: [pixelX, pixelY + pixelH / 2],
       right: [pixelX + pixelW, pixelY + pixelH / 2],
     }
-    const [hx, hy] = positions[edge]
+    const [rawHx, rawHy] = positions[edge]
+    // re-apply the rotation (around the room's possibly-moved new center) so the handle lands
+    // back on the visually rotated edge instead of where it'd be for an unrotated room
+    const newCenterX = pixelX + pixelW / 2
+    const newCenterY = pixelY + pixelH / 2
+    const { x: hx, y: hy } = rotation
+      ? rotateAround(rawHx, rawHy, newCenterX, newCenterY, rotation)
+      : { x: rawHx, y: rawHy }
     e.target.x(hx - HANDLE_SIZE / 2)
     e.target.y(hy - HANDLE_SIZE / 2)
 
@@ -587,8 +623,13 @@ export default function FloorPlanEditor() {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
 
-    const pointerX = (e.target.x() + HANDLE_SIZE / 2 - PADDING) / SCALE
-    const pointerY = (e.target.y() + HANDLE_SIZE / 2 - PADDING) / SCALE
+    const rotation = room.rotation ?? 0
+    const centerX = (room.x + room.width / 2) * SCALE + PADDING
+    const centerY = (room.y + room.height / 2) * SCALE + PADDING
+    const rawHandle = { x: e.target.x() + HANDLE_SIZE / 2, y: e.target.y() + HANDLE_SIZE / 2 }
+    const local = rotation ? rotateAround(rawHandle.x, rawHandle.y, centerX, centerY, -rotation) : rawHandle
+    const pointerX = (local.x - PADDING) / SCALE
+    const pointerY = (local.y - PADDING) / SCALE
 
     let { x, y, width, height, notchWidth, notchHeight } = room
 
@@ -616,7 +657,12 @@ export default function FloorPlanEditor() {
 
     const pixelX = x * SCALE + PADDING
     const pixelY = y * SCALE + PADDING
-    const [hx, hy] = lEdgeMidpoint(pixelX, pixelY, width * SCALE, height * SCALE, notchWidth * SCALE, notchHeight * SCALE, edge)
+    const [rawHx, rawHy] = lEdgeMidpoint(pixelX, pixelY, width * SCALE, height * SCALE, notchWidth * SCALE, notchHeight * SCALE, edge)
+    const newCenterX = pixelX + (width * SCALE) / 2
+    const newCenterY = pixelY + (height * SCALE) / 2
+    const { x: hx, y: hy } = rotation
+      ? rotateAround(rawHx, rawHy, newCenterX, newCenterY, rotation)
+      : { x: rawHx, y: rawHy }
     e.target.x(hx - HANDLE_SIZE / 2)
     e.target.y(hy - HANDLE_SIZE / 2)
 
@@ -639,6 +685,43 @@ export default function FloorPlanEditor() {
       notchWidth: Math.round(rect.notchWidth * 10) / 10,
       notchHeight: Math.round(rect.notchHeight * 10) / 10,
     })
+  }
+
+  // angle of the drag handle relative to the room's center, 0° = straight up, increasing clockwise
+  // (matching Konva's own `rotation` direction) — snaps to the nearest 45° within a few degrees,
+  // same threshold snapInteriorWallEndpoint uses for its own 45° angle snap, so both "click" alike.
+  // Repositions the handle back onto its orbit circle at the resulting angle, same pattern the
+  // resize handles use to snap back onto their edge midpoint after a drag.
+  function computeRoomRotation(e, roomId) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return null
+
+    const centerX = (room.x + room.width / 2) * SCALE + PADDING
+    const centerY = (room.y + room.height / 2) * SCALE + PADDING
+    const angleRad = Math.atan2(e.target.x() - centerX, -(e.target.y() - centerY))
+    let deg = (angleRad * 180) / Math.PI
+    if (deg < 0) deg += 360
+
+    const nearest = Math.round(deg / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG
+    const diff = Math.min(Math.abs(deg - nearest), 360 - Math.abs(deg - nearest))
+    const finalDeg = (diff <= SNAP_ANGLE_THRESHOLD_DEG ? nearest : deg) % 360
+
+    const restY = centerY - (room.height * SCALE) / 2 - ROTATE_HANDLE_DIST
+    const { x: hx, y: hy } = rotateAround(centerX, restY, centerX, centerY, finalDeg)
+    e.target.x(hx)
+    e.target.y(hy)
+
+    return finalDeg
+  }
+
+  function handleRotateMove(e, roomId) {
+    const deg = computeRoomRotation(e, roomId)
+    if (deg != null) updateRoom(roomId, { rotation: deg })
+  }
+
+  function handleRotateEnd(e, roomId) {
+    const deg = computeRoomRotation(e, roomId)
+    if (deg != null) updateRoom(roomId, { rotation: Math.round(deg * 10) / 10 })
   }
 
   function findInteriorWall(roomId, wallId) {
@@ -849,8 +932,11 @@ export default function FloorPlanEditor() {
             return (
               <Group
                 key={room.id}
-                x={pixelX}
-                y={pixelY}
+                x={pixelX + pixelW / 2}
+                y={pixelY + pixelH / 2}
+                offsetX={pixelW / 2}
+                offsetY={pixelH / 2}
+                rotation={room.rotation ?? 0}
                 draggable
                 onDragMove={(e) => handleDragMove(e, room.id)}
                 onDragEnd={(e) => handleDragEnd(e, room.id)}
@@ -924,6 +1010,15 @@ export default function FloorPlanEditor() {
                   fontFamily={font}
                   listening={false}
                 />
+
+                {isSelected && (
+                  <Line
+                    points={[pixelW / 2, 0, pixelW / 2, -ROTATE_HANDLE_DIST]}
+                    stroke={color.brand}
+                    strokeWidth={1.5}
+                    listening={false}
+                  />
+                )}
               </Group>
             )
           })}
@@ -935,12 +1030,44 @@ export default function FloorPlanEditor() {
               const pixelY = room.y * SCALE + PADDING
               const pixelW = room.width * SCALE
               const pixelH = room.height * SCALE
+              const rotation = room.rotation ?? 0
+              const centerX = pixelX + pixelW / 2
+              const centerY = pixelY + pixelH / 2
+              const rotated = (px, py) =>
+                rotation ? rotateAround(px, py, centerX, centerY, rotation) : { x: px, y: py }
 
-              if (room.shape === 'L') {
-                const pixelNW = room.notchWidth * SCALE
-                const pixelNH = room.notchHeight * SCALE
-                return L_WALL_KEYS.map((edge) => {
-                  const [hx, hy] = lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edge)
+              const resizeHandles = (() => {
+                if (room.shape === 'L') {
+                  const pixelNW = room.notchWidth * SCALE
+                  const pixelNH = room.notchHeight * SCALE
+                  return L_WALL_KEYS.map((edge) => {
+                    const [rawX, rawY] = lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edge)
+                    const { x: hx, y: hy } = rotated(rawX, rawY)
+                    return (
+                      <ResizeHandle
+                        key={`${room.id}-${edge}`}
+                        roomId={room.id}
+                        edge={edge}
+                        x={hx}
+                        y={hy}
+                        cursor={L_EDGE_CURSORS[edge]}
+                        color={color}
+                        onResizeMove={handleLResizeMove}
+                        onResizeEnd={handleLResizeEnd}
+                      />
+                    )
+                  })
+                }
+
+                const positions = {
+                  top: [pixelX + pixelW / 2, pixelY],
+                  bottom: [pixelX + pixelW / 2, pixelY + pixelH],
+                  left: [pixelX, pixelY + pixelH / 2],
+                  right: [pixelX + pixelW, pixelY + pixelH / 2],
+                }
+                return WALL_KEYS.map((edge) => {
+                  const [rawX, rawY] = positions[edge]
+                  const { x: hx, y: hy } = rotated(rawX, rawY)
                   return (
                     <ResizeHandle
                       key={`${room.id}-${edge}`}
@@ -948,37 +1075,40 @@ export default function FloorPlanEditor() {
                       edge={edge}
                       x={hx}
                       y={hy}
-                      cursor={L_EDGE_CURSORS[edge]}
+                      cursor={EDGE_CURSORS[edge]}
                       color={color}
-                      onResizeMove={handleLResizeMove}
-                      onResizeEnd={handleLResizeEnd}
+                      onResizeMove={handleResizeMove}
+                      onResizeEnd={handleResizeEnd}
                     />
                   )
                 })
-              }
+              })()
 
-              const positions = {
-                top: [pixelX + pixelW / 2, pixelY],
-                bottom: [pixelX + pixelW / 2, pixelY + pixelH],
-                left: [pixelX, pixelY + pixelH / 2],
-                right: [pixelX + pixelW, pixelY + pixelH / 2],
-              }
-              return WALL_KEYS.map((edge) => {
-                const [hx, hy] = positions[edge]
-                return (
-                  <ResizeHandle
-                    key={`${room.id}-${edge}`}
-                    roomId={room.id}
-                    edge={edge}
-                    x={hx}
-                    y={hy}
-                    cursor={EDGE_CURSORS[edge]}
-                    color={color}
-                    onResizeMove={handleResizeMove}
-                    onResizeEnd={handleResizeEnd}
+              const { x: rotateX, y: rotateY } = rotated(centerX, pixelY - ROTATE_HANDLE_DIST)
+
+              return (
+                <Group key={`${room.id}-handles`}>
+                  {resizeHandles}
+                  <Circle
+                    x={rotateX}
+                    y={rotateY}
+                    radius={ROTATE_HANDLE_RADIUS}
+                    fill={color.bg}
+                    stroke={color.brand}
+                    strokeWidth={1.5}
+                    draggable
+                    hitStrokeWidth={16}
+                    onDragMove={(e) => handleRotateMove(e, room.id)}
+                    onDragEnd={(e) => handleRotateEnd(e, room.id)}
+                    onMouseEnter={(e) => {
+                      e.target.getStage().container().style.cursor = 'grab'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.getStage().container().style.cursor = 'default'
+                    }}
                   />
-                )
-              })
+                </Group>
+              )
             })}
         </Layer>
       </Stage>
