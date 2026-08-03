@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_L_WALLS } from '../constants/lshape'
+import { nextId } from '../utils/id'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
@@ -79,7 +80,7 @@ function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape })
   const width = 8
   const height = 8
   return {
-    id: Date.now(),
+    id: nextId(),
     name: `${namePrefix} ${count + 1}`,
     x: viewCenter.x - width / 2,
     y: viewCenter.y - height / 2,
@@ -243,7 +244,7 @@ const useHouseStore = create((set) => ({
     set((state) => {
       const room = state.rooms.find((r) => r.id === roomId)
       if (!room) return {}
-      const id = Date.now()
+      const id = nextId()
       const offset = 0.5
       const width = 0.9
       const adjacent = findAdjacentWall(state.rooms, room, wall)
@@ -297,14 +298,20 @@ const useHouseStore = create((set) => ({
       }
     }),
 
-  // door ids are unique across the whole plan, so removing by id also clears a shared doorway's other half
+  // door ids are unique across the whole plan, so removing by id also clears a shared doorway's
+  // other half — but only once we've confirmed roomId actually owns doorId, so a stale/mismatched
+  // id from the caller can't wipe out an unrelated door elsewhere in the plan
   removeDoor: (roomId, doorId) =>
-    set((state) => ({
-      rooms: state.rooms.map((room) => ({
-        ...room,
-        doors: room.doors.filter((d) => d.id !== doorId),
-      })),
-    })),
+    set((state) => {
+      const room = state.rooms.find((r) => r.id === roomId)
+      if (!room?.doors.some((d) => d.id === doorId)) return {}
+      return {
+        rooms: state.rooms.map((r) => ({
+          ...r,
+          doors: r.doors.filter((d) => d.id !== doorId),
+        })),
+      }
+    }),
 
   addWindow: (roomId, wall) =>
     set((state) => ({
@@ -312,7 +319,7 @@ const useHouseStore = create((set) => ({
         room.id === roomId
           ? {
               ...room,
-              windows: [...room.windows, { id: Date.now(), wall, offset: 0.5, width: 1.2, height: 1.2 }],
+              windows: [...room.windows, { id: nextId(), wall, offset: 0.5, width: 1.2, height: 1.2 }],
             }
           : room
       ),
@@ -348,7 +355,7 @@ const useHouseStore = create((set) => ({
           interiorWalls: [
             ...room.interiorWalls,
             {
-              id: Date.now(),
+              id: nextId(),
               x1: room.width * 0.25,
               y1: room.height / 2,
               x2: room.width * 0.75,
@@ -390,7 +397,7 @@ const useHouseStore = create((set) => ({
     set((state) => ({
       rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
         ...w,
-        doors: [...w.doors, { id: Date.now(), offset: 0.5, width: 0.9 }],
+        doors: [...w.doors, { id: nextId(), offset: 0.5, width: 0.9 }],
       })),
     })),
 
@@ -414,7 +421,7 @@ const useHouseStore = create((set) => ({
     set((state) => ({
       rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
         ...w,
-        windows: [...w.windows, { id: Date.now(), offset: 0.5, width: 1.2, height: 1.2 }],
+        windows: [...w.windows, { id: nextId(), offset: 0.5, width: 1.2, height: 1.2 }],
       })),
     })),
 
