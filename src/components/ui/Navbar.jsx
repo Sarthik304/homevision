@@ -1,8 +1,18 @@
+import { useShallow } from 'zustand/react/shallow'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 
 export default function Navbar() {
-  const { activeView, setActiveView, darkMode, toggleDarkMode } = useHouseStore()
+  // useShallow subscribes only to these fields (shallow-compared), instead of re-rendering the
+  // navbar on every store change (e.g. a room being dragged in the 2D view)
+  const { activeView, setActiveView, darkMode, toggleDarkMode } = useHouseStore(
+    useShallow((s) => ({
+      activeView: s.activeView,
+      setActiveView: s.setActiveView,
+      darkMode: s.darkMode,
+      toggleDarkMode: s.toggleDarkMode,
+    }))
+  )
   const color = getColors(darkMode)
 
   return (

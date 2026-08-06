@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getLEdges } from '../constants/lshape'
-import { getLWallDefs, WALL_THICKNESS } from './wallGeometry'
+import { getLWallDefs, getRectWallDefs, WALL_THICKNESS } from './wallGeometry'
 
 // Same rotation convention getLWallDefs relies on (three.js's RotationY matrix): every wall's
 // rotation here is an exact multiple of 90° (since L-shape edges are always axis-aligned), so
@@ -112,6 +112,53 @@ describe('getLWallDefs', () => {
       expect(start.y).toBeCloseTo(edge.from.y, 0)
       expect(end.x).toBeCloseTo(edge.to.x, 0)
       expect(end.y).toBeCloseTo(edge.to.y, 0)
+    })
+  })
+})
+
+// getRectWallDefs is a second, independent hand-written implementation of the same idea as
+// getLWallDefs above (see the file-level comment on why it isn't unified onto one code path) —
+// its own parity test here is what would have caught the original top/left offset-reversal bug,
+// and what stops a future edit to either implementation from silently drifting out of sync again.
+describe('getRectWallDefs', () => {
+  const width = 10
+  const height = 8
+
+  it('every wall meets its neighbor with no gap', () => {
+    const defs = getRectWallDefs(width, height)
+    const byKey = Object.fromEntries(defs.map((d) => [d.key, d]))
+    const cycle = ['top', 'right', 'bottom', 'left']
+    cycle.forEach((key, i) => {
+      const nextKey = cycle[(i + 1) % cycle.length]
+      expect(boxesTouch(footprintAABB(byKey[key]), footprintAABB(byKey[nextKey]))).toBe(true)
+    })
+  })
+
+  // must match FloorPlanEditor's RoomWalls (2D): offset 0 is the left end for top/bottom walls
+  // and the top end for left/right walls — this is exactly the convention that 'top' and 'left'
+  // got backwards before the rotation fix (see Room3D.jsx's rect wallDefs / getRectWallDefs)
+  it('offset 0/1 land on the same room-local points as the 2D editor, for every wall', () => {
+    const expected = {
+      top: { from: { x: 0, y: 0 }, to: { x: width, y: 0 } },
+      bottom: { from: { x: 0, y: height }, to: { x: width, y: height } },
+      left: { from: { x: 0, y: 0 }, to: { x: 0, y: height } },
+      right: { from: { x: width, y: 0 }, to: { x: width, y: height } },
+    }
+    const defs = getRectWallDefs(width, height)
+    defs.forEach((def) => {
+      const { from, to } = expected[def.key]
+      const atOffset = (offset) => {
+        const { x, z } = localToWorld(def, offset * def.length - def.length / 2, 0)
+        return { x: x + width / 2, y: z + height / 2 }
+      }
+      // loose tolerance: position carries a WALL_INSET (0.05m) nudge that from/to don't have —
+      // plenty tight to still fail hard on an actual from/to swap
+      const start = atOffset(0)
+      const end = atOffset(1)
+      expect(start.x).toBeCloseTo(from.x, 0)
+      expect(start.y).toBeCloseTo(from.y, 0)
+      expect(end.x).toBeCloseTo(to.x, 0)
+      expect(end.y).toBeCloseTo(to.y, 0)
     })
   })
 })

@@ -4,7 +4,7 @@ import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
-import { getLWallDefs, WALL_THICKNESS, WALL_INSET } from '../../utils/wallGeometry'
+import { getLWallDefs, getRectWallDefs, WALL_THICKNESS } from '../../utils/wallGeometry'
 
 const WALL_HEIGHT = 3
 const DOOR_HEIGHT = 2.1
@@ -189,14 +189,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
 
   // left/right walls are trimmed by the top/bottom walls' thickness at each end so
   // their boxes butt-join at the corners instead of overlapping (see clipSegments)
-  const wallDefs = isL
-    ? getLWallDefs(width, height, notchWidth, notchHeight)
-    : [
-        { key: 'bottom', length: width, position: [0, 0, height / 2 - WALL_INSET], rotation: [0, 0, 0] },
-        { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, 0, 0] },
-        { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
-        { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
-      ]
+  const wallDefs = isL ? getLWallDefs(width, height, notchWidth, notchHeight) : getRectWallDefs(width, height)
 
   return (
     <group position={[posX, 0, posZ]} rotation={[0, -((room.rotation ?? 0) * Math.PI) / 180, 0]}>

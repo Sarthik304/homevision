@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Environment } from '@react-three/drei'
 import { HexColorPicker } from 'react-colorful'
+import { useShallow } from 'zustand/react/shallow'
 import Room3D from './Room3D'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
@@ -17,6 +18,19 @@ function getWallColor(room, kind, key) {
   return wall?.color ?? room.wallColor
 }
 
+// keeps HouseViewer from re-rendering on store changes it doesn't care about — useShallow only
+// re-renders it when one of these specific fields actually changes
+const selectHouseViewerState = (s) => ({
+  rooms: s.rooms,
+  selectedRoomId: s.selectedRoomId,
+  selectRoom: s.selectRoom,
+  selectBoundaryWall: s.selectBoundaryWall,
+  selectInteriorWall: s.selectInteriorWall,
+  updateWallColor: s.updateWallColor,
+  updateInteriorWall: s.updateInteriorWall,
+  darkMode: s.darkMode,
+})
+
 export default function HouseViewer() {
   const {
     rooms,
@@ -27,7 +41,7 @@ export default function HouseViewer() {
     updateWallColor,
     updateInteriorWall,
     darkMode,
-  } = useHouseStore()
+  } = useHouseStore(useShallow(selectHouseViewerState))
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [colorPicker, setColorPicker] = useState(null) // { roomId, kind, key, x, y }

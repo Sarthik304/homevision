@@ -1,5 +1,6 @@
 import { HexColorPicker } from 'react-colorful'
 import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { MIN_ROOM_SIZE } from '../../constants/floorPlan'
@@ -414,6 +415,39 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
   )
 }
 
+// keeps the Sidebar from re-rendering on every store change (e.g. dragging a room in the 2D
+// view) — useShallow only re-renders it when one of these specific fields actually changes
+const selectSidebarState = (s) => ({
+  rooms: s.rooms,
+  selectedRoomId: s.selectedRoomId,
+  selectRoom: s.selectRoom,
+  selectedBoundaryWallKey: s.selectedBoundaryWallKey,
+  selectedInteriorWallId: s.selectedInteriorWallId,
+  updateRoomColor: s.updateRoomColor,
+  updateRoom: s.updateRoom,
+  updateWallColor: s.updateWallColor,
+  addRoom: s.addRoom,
+  addFloor: s.addFloor,
+  removeRoom: s.removeRoom,
+  toggleWall: s.toggleWall,
+  addDoor: s.addDoor,
+  updateDoor: s.updateDoor,
+  removeDoor: s.removeDoor,
+  addWindow: s.addWindow,
+  updateWindow: s.updateWindow,
+  removeWindow: s.removeWindow,
+  addInteriorWall: s.addInteriorWall,
+  updateInteriorWall: s.updateInteriorWall,
+  removeInteriorWall: s.removeInteriorWall,
+  addInteriorDoor: s.addInteriorDoor,
+  updateInteriorDoor: s.updateInteriorDoor,
+  removeInteriorDoor: s.removeInteriorDoor,
+  addInteriorWindow: s.addInteriorWindow,
+  updateInteriorWindow: s.updateInteriorWindow,
+  removeInteriorWindow: s.removeInteriorWindow,
+  darkMode: s.darkMode,
+})
+
 export default function Sidebar() {
   const {
     rooms,
@@ -444,7 +478,7 @@ export default function Sidebar() {
     updateInteriorWindow,
     removeInteriorWindow,
     darkMode,
-  } = useHouseStore()
+  } = useHouseStore(useShallow(selectSidebarState))
 
   const interiorWallActions = {
     updateInteriorWall,

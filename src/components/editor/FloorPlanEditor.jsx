@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Stage, Layer, Rect, Text, Group, Line, Circle } from 'react-konva'
+import { useShallow } from 'zustand/react/shallow'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, font, radius } from '../../theme'
 import { SCALE, PADDING, MIN_ROOM_SIZE } from '../../constants/floorPlan'
@@ -380,6 +381,24 @@ function ZoomButton({ children, onClick, title, color }) {
   )
 }
 
+// keeps FloorPlanEditor from re-rendering on store changes it doesn't care about — useShallow
+// only re-renders it when one of these specific fields actually changes
+const selectFloorPlanState = (s) => ({
+  rooms: s.rooms,
+  selectedRoomId: s.selectedRoomId,
+  selectRoom: s.selectRoom,
+  updateRoom: s.updateRoom,
+  moveRoomsTo: s.moveRoomsTo,
+  selectedRoomIds: s.selectedRoomIds,
+  toggleRoomSelection: s.toggleRoomSelection,
+  setSelectedRoomIds: s.setSelectedRoomIds,
+  selectedInteriorWallId: s.selectedInteriorWallId,
+  selectInteriorWall: s.selectInteriorWall,
+  updateInteriorWall: s.updateInteriorWall,
+  darkMode: s.darkMode,
+  setViewCenter: s.setViewCenter,
+})
+
 export default function FloorPlanEditor() {
   const {
     rooms,
@@ -395,7 +414,7 @@ export default function FloorPlanEditor() {
     updateInteriorWall,
     darkMode,
     setViewCenter,
-  } = useHouseStore()
+  } = useHouseStore(useShallow(selectFloorPlanState))
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
