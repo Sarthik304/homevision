@@ -193,8 +193,8 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
     ? getLWallDefs(width, height, notchWidth, notchHeight)
     : [
         { key: 'bottom', length: width, position: [0, 0, height / 2 - WALL_INSET], rotation: [0, 0, 0] },
-        { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, Math.PI, 0] },
-        { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
+        { key: 'top', length: width, position: [0, 0, -height / 2 + WALL_INSET], rotation: [0, 0, 0] },
+        { key: 'left', length: height, position: [-width / 2 + WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
         { key: 'right', length: height, position: [width / 2 - WALL_INSET, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: WALL_THICKNESS, trimEnd: WALL_THICKNESS },
       ]
 

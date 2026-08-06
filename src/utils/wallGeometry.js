@@ -31,7 +31,7 @@ export function getLWallDefs(width, height, notchWidth, notchHeight) {
       key,
       length,
       position: [midX - width / 2, 0, midY - height / 2],
-      rotation: [0, Math.atan2(-dy, -dx), 0],
+      rotation: [0, Math.atan2(-dy, dx), 0],
       trimStart: isVertical ? WALL_THICKNESS : 0,
       trimEnd: isVertical && key !== 'notchV' ? WALL_THICKNESS : 0,
     }

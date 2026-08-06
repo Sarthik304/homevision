@@ -90,4 +90,28 @@ describe('getLWallDefs', () => {
     const buggyNotchV = { ...defs.find((d) => d.key === 'notchV'), trimEnd: WALL_THICKNESS }
     expect(boxesTouch(footprintAABB(buggyNotchV), footprintAABB(notchH))).toBe(false)
   })
+
+  // a door/window's `offset` (0-1) must land on the same physical point in 2D (FloorPlanEditor,
+  // which walks edge.from -> edge.to as offset goes 0 -> 1) and 3D (this wall def's local x-axis,
+  // offset*length from the wall's start). Otherwise dragging a door in 2D moves it to the mirrored
+  // spot in 3D — this caught top/notchH/bottom all being reversed before the atan2 sign fix.
+  it('offset 0 lands on edge.from and offset 1 lands on edge.to, in both 2D and 3D', () => {
+    const edges = getLEdges(width, height, notchWidth, notchHeight)
+    const defs = getLWallDefs(width, height, notchWidth, notchHeight)
+    edges.forEach((edge, i) => {
+      const def = defs[i]
+      const atOffset = (offset) => {
+        const { x, z } = localToWorld(def, offset * def.length - def.length / 2, 0)
+        return { x: x + width / 2, y: z + height / 2 }
+      }
+      // loose tolerance: position carries a WALL_INSET (0.05m) nudge along the wall's normal
+      // that from/to don't have — plenty tight to still fail hard on an actual from/to swap
+      const start = atOffset(0)
+      const end = atOffset(1)
+      expect(start.x).toBeCloseTo(edge.from.x, 0)
+      expect(start.y).toBeCloseTo(edge.from.y, 0)
+      expect(end.x).toBeCloseTo(edge.to.x, 0)
+      expect(end.y).toBeCloseTo(edge.to.y, 0)
+    })
+  })
 })
