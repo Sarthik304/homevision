@@ -134,6 +134,11 @@ const useHouseStore = create((set) => ({
   ],
 
   selectedRoomId: null,
+  // ids of every room currently multi-selected in the 2D view (see selectRoom/toggleRoomSelection/
+  // setSelectedRoomIds) — dragging any one of them in FloorPlanEditor moves the whole set together.
+  // Single-selecting a room always keeps this in sync as a one-element array, so `isSelected`
+  // checks in the renderer only ever need to look at this list.
+  selectedRoomIds: [],
   selectedInteriorWallId: null,
   selectedBoundaryWallKey: null,
   activeView: '2d',
@@ -146,8 +151,41 @@ const useHouseStore = create((set) => ({
 
   setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 
-  // selecting a room clears any wall selection, and vice versa (see selectInteriorWall/selectBoundaryWall)
-  selectRoom: (id) => set({ selectedRoomId: id, selectedInteriorWallId: null, selectedBoundaryWallKey: null }),
+  // selecting a room clears any wall selection, and vice versa (see selectInteriorWall/selectBoundaryWall).
+  // Also resets the multi-select set to just this room (or empty, if deselecting) so a plain click
+  // always leaves selectedRoomIds consistent with selectedRoomId.
+  selectRoom: (id) =>
+    set({
+      selectedRoomId: id,
+      selectedRoomIds: id ? [id] : [],
+      selectedInteriorWallId: null,
+      selectedBoundaryWallKey: null,
+    }),
+
+  // shift-click a room to add/remove it from the multi-select set without disturbing the rest.
+  // selectedRoomId mirrors the set only while it has exactly one member, so the sidebar's
+  // per-room detail editor shows up only when editing makes sense for a single room.
+  toggleRoomSelection: (id) =>
+    set((state) => {
+      const selectedRoomIds = state.selectedRoomIds.includes(id)
+        ? state.selectedRoomIds.filter((rid) => rid !== id)
+        : [...state.selectedRoomIds, id]
+      return {
+        selectedRoomIds,
+        selectedRoomId: selectedRoomIds.length === 1 ? selectedRoomIds[0] : null,
+        selectedInteriorWallId: null,
+        selectedBoundaryWallKey: null,
+      }
+    }),
+
+  // bulk-replace the multi-select set, e.g. after a marquee (rubber-band) drag in the 2D view
+  setSelectedRoomIds: (ids) =>
+    set({
+      selectedRoomIds: ids,
+      selectedRoomId: ids.length === 1 ? ids[0] : null,
+      selectedInteriorWallId: null,
+      selectedBoundaryWallKey: null,
+    }),
 
   selectInteriorWall: (wallId) => set({ selectedInteriorWallId: wallId, selectedBoundaryWallKey: null }),
 
@@ -195,6 +233,7 @@ const useHouseStore = create((set) => ({
       return {
         rooms,
         selectedRoomId: state.selectedRoomId === id ? null : state.selectedRoomId,
+        selectedRoomIds: state.selectedRoomIds.filter((rid) => rid !== id),
         selectedInteriorWallId: wallStillExists ? state.selectedInteriorWallId : null,
         selectedBoundaryWallKey: state.selectedRoomId === id ? null : state.selectedBoundaryWallKey,
       }
@@ -209,6 +248,21 @@ const useHouseStore = create((set) => ({
       if (!geometryChanged) return { rooms }
       const movedRoom = rooms.find((r) => r.id === id)
       return { rooms: resyncSharedDoors(rooms, movedRoom) }
+    }),
+
+  // batched version of updateRoom's x/y move, for dragging a whole multi-selected group together
+  // in one go — positions is [{id, x, y}, ...], one absolute position per moved room
+  moveRoomsTo: (positions) =>
+    set((state) => {
+      const byId = new Map(positions.map((p) => [p.id, p]))
+      let rooms = state.rooms.map((room) =>
+        byId.has(room.id) ? { ...room, x: byId.get(room.id).x, y: byId.get(room.id).y } : room
+      )
+      positions.forEach(({ id }) => {
+        const moved = rooms.find((r) => r.id === id)
+        if (moved) rooms = resyncSharedDoors(rooms, moved)
+      })
+      return { rooms }
     }),
 
   toggleWall: (roomId, wallKey) =>

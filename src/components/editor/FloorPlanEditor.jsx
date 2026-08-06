@@ -383,6 +383,10 @@ export default function FloorPlanEditor() {
     selectedRoomId,
     selectRoom,
     updateRoom,
+    moveRoomsTo,
+    selectedRoomIds,
+    toggleRoomSelection,
+    setSelectedRoomIds,
     selectedInteriorWallId,
     selectInteriorWall,
     updateInteriorWall,
@@ -394,6 +398,28 @@ export default function FloorPlanEditor() {
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 })
   const [stageScale, setStageScale] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
+  const [isShiftHeld, setIsShiftHeld] = useState(false)
+  // rubber-band selection box, in world-pixel space (same space as room pixelX/pixelY below)
+  const [marquee, setMarquee] = useState(null)
+  // snapshot taken at the start of a group drag: which room started the drag, its pointer-space
+  // start position, and every selected room's starting (x, y) in meters — see handleGroupDragMove
+  const groupDragRef = useRef(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Shift') setIsShiftHeld(true)
+      if (e.key === 'Escape') setSelectedRoomIds([])
+    }
+    const handleKeyUp = (e) => {
+      if (e.key === 'Shift') setIsShiftHeld(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [setSelectedRoomIds])
 
   // keeps the store aware of what room-space point is currently centered on screen, so a newly
   // added room can be placed right where the user is looking instead of always at a fixed spot
@@ -460,6 +486,119 @@ export default function FloorPlanEditor() {
       x: aabbX + selfAABB.width / 2 - room.width / 2,
       y: aabbY + selfAABB.height / 2 - room.height / 2,
     })
+  }
+
+  // when the room being grabbed is part of a multi-selection, the whole set translates together
+  // by the same raw pixel delta (no snapping — snapping a rigid group against itself doesn't make
+  // sense, and against other rooms would only ever align the one room under the pointer). A single
+  // selected room still goes through the existing snap-to-neighbor path in handleDragMove/End.
+  function startGroupDrag(e, roomId) {
+    if (e.target !== e.currentTarget) return
+    if (selectedRoomIds.length < 2 || !selectedRoomIds.includes(roomId)) {
+      groupDragRef.current = null
+      return
+    }
+    groupDragRef.current = {
+      originId: roomId,
+      startX: e.target.x(),
+      startY: e.target.y(),
+      origins: selectedRoomIds
+        .map((id) => rooms.find((r) => r.id === id))
+        .filter(Boolean)
+        .map((r) => ({ id: r.id, x: r.x, y: r.y })),
+    }
+  }
+
+  function groupDragDelta(e) {
+    const gd = groupDragRef.current
+    return { dx: (e.target.x() - gd.startX) / SCALE, dy: (e.target.y() - gd.startY) / SCALE }
+  }
+
+  function handleGroupDragMove(e, roomId) {
+    if (e.target !== e.currentTarget) return
+    const gd = groupDragRef.current
+    if (!gd || gd.originId !== roomId) {
+      handleDragMove(e, roomId)
+      return
+    }
+    const { dx, dy } = groupDragDelta(e)
+    moveRoomsTo(gd.origins.map((o) => ({ id: o.id, x: o.x + dx, y: o.y + dy })))
+  }
+
+  function handleGroupDragEnd(e, roomId) {
+    if (e.target !== e.currentTarget) return
+    const gd = groupDragRef.current
+    if (!gd || gd.originId !== roomId) {
+      handleDragEnd(e, roomId)
+      return
+    }
+    const { dx, dy } = groupDragDelta(e)
+    moveRoomsTo(
+      gd.origins.map((o) => ({
+        id: o.id,
+        x: Math.round((o.x + dx) * 10) / 10,
+        y: Math.round((o.y + dy) * 10) / 10,
+      }))
+    )
+    groupDragRef.current = null
+  }
+
+  // converts a screen pointer position to world-pixel space (same space as each room's
+  // pixelX/pixelY below), undoing the stage's own pan/zoom transform
+  function stagePointerToWorld(stage) {
+    const pointer = stage.getPointerPosition()
+    if (!pointer) return null
+    return { x: (pointer.x - stagePos.x) / stageScale, y: (pointer.y - stagePos.y) / stageScale }
+  }
+
+  function roomsInMarquee(m) {
+    const minX = Math.min(m.x1, m.x2)
+    const maxX = Math.max(m.x1, m.x2)
+    const minY = Math.min(m.y1, m.y2)
+    const maxY = Math.max(m.y1, m.y2)
+    return rooms
+      .filter((room) => {
+        const rx1 = room.x * SCALE + PADDING
+        const ry1 = room.y * SCALE + PADDING
+        const rx2 = rx1 + room.width * SCALE
+        const ry2 = ry1 + room.height * SCALE
+        return rx1 < maxX && rx2 > minX && ry1 < maxY && ry2 > minY
+      })
+      .map((room) => room.id)
+  }
+
+  // shift+drag on empty canvas draws a selection box instead of panning; shift+click a room
+  // toggles it in/out of the multi-select set (see handleStageMouseDown/Move/Up and the room
+  // Group's onClick below)
+  function handleStageMouseDown(e) {
+    if (!isShiftHeld) return
+    const stage = e.target.getStage()
+    if (e.target !== stage) return
+    const world = stagePointerToWorld(stage)
+    if (!world) return
+    setMarquee({ x1: world.x, y1: world.y, x2: world.x, y2: world.y })
+  }
+
+  function handleStageMouseMove(e) {
+    if (!marquee) return
+    const world = stagePointerToWorld(e.target.getStage())
+    if (!world) return
+    setMarquee((m) => (m ? { ...m, x2: world.x, y2: world.y } : m))
+  }
+
+  function handleStageMouseUp() {
+    if (!marquee) return
+    const dragDist = Math.hypot(marquee.x2 - marquee.x1, marquee.y2 - marquee.y1)
+    if (dragDist > 3) setSelectedRoomIds(roomsInMarquee(marquee))
+    setMarquee(null)
+  }
+
+  // plain click on empty canvas clears the selection; shift-click on empty canvas is a marquee
+  // drag (or a no-op click) handled above, so it's left alone here
+  function handleStageClick(e) {
+    if (isShiftHeld) return
+    if (e.target !== e.target.getStage()) return
+    selectRoom(null)
   }
 
   function resizeRoomForEdge(e, roomId, edge) {
@@ -825,17 +964,21 @@ export default function FloorPlanEditor() {
         scaleY={stageScale}
         x={stagePos.x}
         y={stagePos.y}
-        draggable
+        draggable={!isShiftHeld}
         onDragEnd={(e) => {
           // ignore drags bubbling up from a room/wall, only handle the Stage's own pan drag
           if (e.target !== e.currentTarget) return
           setStagePos({ x: e.target.x(), y: e.target.y() })
         }}
         onWheel={handleWheel}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
+        onClick={handleStageClick}
       >
         <Layer>
           {rooms.map((room) => {
-            const isSelected = room.id === selectedRoomId
+            const isSelected = selectedRoomIds.includes(room.id)
             const pixelX = room.x * SCALE + PADDING
             const pixelY = room.y * SCALE + PADDING
             const pixelW = room.width * SCALE
@@ -854,9 +997,10 @@ export default function FloorPlanEditor() {
                 offsetY={pixelH / 2}
                 rotation={room.rotation ?? 0}
                 draggable
-                onDragMove={(e) => handleDragMove(e, room.id)}
-                onDragEnd={(e) => handleDragEnd(e, room.id)}
-                onClick={() => selectRoom(room.id)}
+                onDragStart={(e) => startGroupDrag(e, room.id)}
+                onDragMove={(e) => handleGroupDragMove(e, room.id)}
+                onDragEnd={(e) => handleGroupDragEnd(e, room.id)}
+                onClick={(e) => (e.evt.shiftKey ? toggleRoomSelection(room.id) : selectRoom(room.id))}
               >
                 {isL ? (
                   <Line
@@ -1026,6 +1170,21 @@ export default function FloorPlanEditor() {
                 </Group>
               )
             })}
+
+          {marquee && (
+            <Rect
+              x={Math.min(marquee.x1, marquee.x2)}
+              y={Math.min(marquee.y1, marquee.y2)}
+              width={Math.abs(marquee.x2 - marquee.x1)}
+              height={Math.abs(marquee.y2 - marquee.y1)}
+              fill={color.brand}
+              opacity={0.12}
+              stroke={color.brand}
+              strokeWidth={1}
+              dash={[4, 4]}
+              listening={false}
+            />
+          )}
         </Layer>
       </Stage>
 
@@ -1065,6 +1224,42 @@ export default function FloorPlanEditor() {
         </ZoomButton>
       </div>
 
+      {selectedRoomIds.length > 1 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: color.bg,
+            padding: '8px 12px',
+            borderRadius: radius.pill,
+            border: `1px solid ${color.border}`,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+            fontSize: 12,
+            color: color.text,
+          }}
+        >
+          {selectedRoomIds.length} rooms selected — drag any one to move them together
+          <button
+            onClick={() => setSelectedRoomIds([])}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: color.brand,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 700,
+              padding: 0,
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div
         style={{
           position: 'absolute',
@@ -1075,7 +1270,7 @@ export default function FloorPlanEditor() {
           color: color.muted,
         }}
       >
-        Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it
+        Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it
       </div>
     </div>
   )
