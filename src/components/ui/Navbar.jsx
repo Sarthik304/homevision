@@ -20,14 +20,23 @@ export default function Navbar() {
     >
       <div
         style={{
-          fontSize: 16,
-          fontWeight: 700,
-          color: color.text,
-          letterSpacing: -0.2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
           marginRight: 12,
         }}
       >
-        HomeVision
+        <img src="/favicon.svg" alt="" width={28} height={28} style={{ display: 'block', objectFit: 'contain' }} />
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: color.text,
+            letterSpacing: -0.2,
+          }}
+        >
+          HomeVision
+        </span>
       </div>
 
       <div
