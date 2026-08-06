@@ -185,7 +185,7 @@ function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color 
 }
 
 // interior partition walls: freeform two-endpoint walls, not tied to a room's 4 boundary edges
-function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, onBodyEnd, onEndpointMove, onEndpointEnd }) {
+function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart, onBodyMove, onBodyEnd, onEndpointMove, onEndpointEnd }) {
   const wallsList = room.interiorWalls ?? []
 
   return wallsList.map((wall) => {
@@ -268,7 +268,9 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, 
           )
         })}
 
-        {/* click target + drag rail for translating the whole wall */}
+        {/* click target + drag rail for translating the whole wall — always draggable, same as a
+            room's own body, so grabbing an unselected wall moves it immediately instead of
+            requiring a select-then-drag two-step */}
         <Line
           points={[x1px, y1px, x2px, y2px]}
           stroke={color.brand}
@@ -276,12 +278,13 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyMove, 
           strokeWidth={Math.max(strokeW * 1.8, 14)}
           lineCap="round"
           hitStrokeWidth={Math.max(strokeW * 1.8, 14)}
-          draggable={wallSelected}
+          draggable
           onClick={handleSelect}
+          onDragStart={() => onBodyStart(room.id, wall.id)}
           onDragMove={(e) => onBodyMove(e, room.id, wall.id)}
           onDragEnd={(e) => onBodyEnd(e, room.id, wall.id)}
           onMouseEnter={(e) => {
-            e.target.getStage().container().style.cursor = wallSelected ? 'move' : 'pointer'
+            e.target.getStage().container().style.cursor = 'move'
           }}
           onMouseLeave={(e) => {
             e.target.getStage().container().style.cursor = 'default'
@@ -404,6 +407,9 @@ export default function FloorPlanEditor() {
   // snapshot taken at the start of a group drag: which room started the drag, its pointer-space
   // start position, and every selected room's starting (x, y) in meters — see handleGroupDragMove
   const groupDragRef = useRef(null)
+  // same "snapshot the start, then add Konva's cumulative-since-start offset" pattern as
+  // groupDragRef, for translating a whole interior wall — see startInteriorWallBodyDrag
+  const wallBodyDragRef = useRef(null)
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -787,39 +793,61 @@ export default function FloorPlanEditor() {
     return { room, wall }
   }
 
-  // translates both endpoints of an interior wall by the drag node's pixel offset, clamped to the room's bounds
-  function moveInteriorWallBody(e, roomId, wallId) {
+  // Konva's drag rail reports its position as the TOTAL offset from wherever the drag began
+  // (fixed at drag-start, not a per-frame delta — see Node.js's _setDragPosition/_createDragElement),
+  // so the body-translate math has to add that total offset onto the wall's ORIGINAL position, not
+  // onto whatever the store already holds (which the previous move already updated). Adding it to
+  // the live store value double-counts every frame — each new total-since-start offset stacks on
+  // top of the previous frame's already-applied offset — and the wall accelerates away from the
+  // cursor within a few frames. Snapshotting start position once (here) and reusing it for the
+  // whole gesture (below) is the same fix applied to multi-room group dragging (see groupDragRef).
+  function startInteriorWallBodyDrag(roomId, wallId) {
     const found = findInteriorWall(roomId, wallId)
-    if (!found) return null
+    if (!found) return
     const { room, wall } = found
+    wallBodyDragRef.current = {
+      roomId,
+      wallId,
+      x1: wall.x1,
+      y1: wall.y1,
+      x2: wall.x2,
+      y2: wall.y2,
+      roomWidth: room.width,
+      roomHeight: room.height,
+    }
+  }
+
+  function computeInteriorWallBodyMove(e, roomId, wallId) {
+    const gd = wallBodyDragRef.current
+    if (!gd || gd.roomId !== roomId || gd.wallId !== wallId) return null
 
     const dxM = e.target.x() / SCALE
     const dyM = e.target.y() / SCALE
-    const minDx = -Math.min(wall.x1, wall.x2)
-    const maxDx = room.width - Math.max(wall.x1, wall.x2)
-    const minDy = -Math.min(wall.y1, wall.y2)
-    const maxDy = room.height - Math.max(wall.y1, wall.y2)
+    const minDx = -Math.min(gd.x1, gd.x2)
+    const maxDx = gd.roomWidth - Math.max(gd.x1, gd.x2)
+    const minDy = -Math.min(gd.y1, gd.y2)
+    const maxDy = gd.roomHeight - Math.max(gd.y1, gd.y2)
     const clampedDx = Math.min(maxDx, Math.max(minDx, dxM))
     const clampedDy = Math.min(maxDy, Math.max(minDy, dyM))
 
-    e.target.x(0)
-    e.target.y(0)
-
     return {
-      x1: wall.x1 + clampedDx,
-      y1: wall.y1 + clampedDy,
-      x2: wall.x2 + clampedDx,
-      y2: wall.y2 + clampedDy,
+      x1: gd.x1 + clampedDx,
+      y1: gd.y1 + clampedDy,
+      x2: gd.x2 + clampedDx,
+      y2: gd.y2 + clampedDy,
     }
   }
 
   function handleInteriorWallBodyMove(e, roomId, wallId) {
-    const rect = moveInteriorWallBody(e, roomId, wallId)
+    const rect = computeInteriorWallBodyMove(e, roomId, wallId)
     if (rect) updateInteriorWall(roomId, wallId, rect)
   }
 
   function handleInteriorWallBodyEnd(e, roomId, wallId) {
-    const rect = moveInteriorWallBody(e, roomId, wallId)
+    const rect = computeInteriorWallBodyMove(e, roomId, wallId)
+    wallBodyDragRef.current = null
+    e.target.x(0)
+    e.target.y(0)
     if (!rect) return
     updateInteriorWall(roomId, wallId, {
       x1: Math.round(rect.x1 * 10) / 10,
@@ -1041,6 +1069,7 @@ export default function FloorPlanEditor() {
                   selectedWallId={selectedInteriorWallId}
                   color={color}
                   onSelectWall={selectInteriorWall}
+                  onBodyStart={startInteriorWallBodyDrag}
                   onBodyMove={handleInteriorWallBodyMove}
                   onBodyEnd={handleInteriorWallBodyEnd}
                   onEndpointMove={handleInteriorWallEndpointMove}
