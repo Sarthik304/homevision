@@ -125,3 +125,127 @@ describe('entity ids', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 })
+
+describe('selectRoom', () => {
+  it('selecting a room keeps selectedRoomIds in sync as a one-element array', () => {
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+    expect(useHouseStore.getState().selectedRoomIds).toEqual([LIVING_ROOM_ID])
+  })
+
+  it('deselecting (null) clears selectedRoomIds too', () => {
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+    useHouseStore.getState().selectRoom(null)
+    expect(useHouseStore.getState().selectedRoomIds).toEqual([])
+  })
+
+  it('clears any wall selection', () => {
+    useHouseStore.getState().selectBoundaryWall('top')
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+    expect(useHouseStore.getState().selectedBoundaryWallKey).toBeNull()
+  })
+})
+
+describe('toggleRoomSelection', () => {
+  it('adds an unselected room to the set, and mirrors it onto selectedRoomId while alone', () => {
+    useHouseStore.getState().toggleRoomSelection(LIVING_ROOM_ID)
+    expect(useHouseStore.getState().selectedRoomIds).toEqual([LIVING_ROOM_ID])
+    expect(useHouseStore.getState().selectedRoomId).toBe(LIVING_ROOM_ID)
+  })
+
+  it('adding a second room clears selectedRoomId (no single-room detail editor while multi-selected)', () => {
+    useHouseStore.getState().toggleRoomSelection(LIVING_ROOM_ID)
+    useHouseStore.getState().toggleRoomSelection(BEDROOM_ID)
+
+    expect(useHouseStore.getState().selectedRoomIds.sort()).toEqual([LIVING_ROOM_ID, BEDROOM_ID].sort())
+    expect(useHouseStore.getState().selectedRoomId).toBeNull()
+  })
+
+  it('toggling an already-selected room removes just that one, leaving the rest', () => {
+    useHouseStore.getState().toggleRoomSelection(LIVING_ROOM_ID)
+    useHouseStore.getState().toggleRoomSelection(BEDROOM_ID)
+    useHouseStore.getState().toggleRoomSelection(LIVING_ROOM_ID)
+
+    expect(useHouseStore.getState().selectedRoomIds).toEqual([BEDROOM_ID])
+    // back down to one room, so selectedRoomId re-syncs to it
+    expect(useHouseStore.getState().selectedRoomId).toBe(BEDROOM_ID)
+  })
+
+  it('clears any wall selection', () => {
+    useHouseStore.getState().selectInteriorWall(99)
+    useHouseStore.getState().toggleRoomSelection(LIVING_ROOM_ID)
+    expect(useHouseStore.getState().selectedInteriorWallId).toBeNull()
+  })
+})
+
+describe('setSelectedRoomIds', () => {
+  it('bulk-replaces the selection, e.g. after a marquee drag', () => {
+    useHouseStore.getState().setSelectedRoomIds([LIVING_ROOM_ID, BEDROOM_ID])
+    expect(useHouseStore.getState().selectedRoomIds.sort()).toEqual([LIVING_ROOM_ID, BEDROOM_ID].sort())
+    expect(useHouseStore.getState().selectedRoomId).toBeNull()
+  })
+
+  it('mirrors a single-element list onto selectedRoomId', () => {
+    useHouseStore.getState().setSelectedRoomIds([BEDROOM_ID])
+    expect(useHouseStore.getState().selectedRoomId).toBe(BEDROOM_ID)
+  })
+
+  it('an empty list clears selectedRoomId', () => {
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+    useHouseStore.getState().setSelectedRoomIds([])
+    expect(useHouseStore.getState().selectedRoomId).toBeNull()
+  })
+})
+
+describe('removeRoom', () => {
+  it('drops the removed room from selectedRoomIds without touching the rest of the selection', () => {
+    useHouseStore.getState().setSelectedRoomIds([LIVING_ROOM_ID, BEDROOM_ID])
+    useHouseStore.getState().removeRoom(LIVING_ROOM_ID)
+
+    expect(useHouseStore.getState().selectedRoomIds).toEqual([BEDROOM_ID])
+  })
+})
+
+describe('moveRoomsTo', () => {
+  it('moves every room in the batch to its given position in one call', () => {
+    useHouseStore.getState().moveRoomsTo([
+      { id: LIVING_ROOM_ID, x: 5, y: 5 },
+      { id: BEDROOM_ID, x: 50, y: 50 },
+    ])
+
+    expect(getRoom(LIVING_ROOM_ID)).toMatchObject({ x: 5, y: 5 })
+    expect(getRoom(BEDROOM_ID)).toMatchObject({ x: 50, y: 50 })
+  })
+
+  it("re-centers a moved room's door onto its still-adjacent neighbor's door, same as updateRoom", () => {
+    useHouseStore.getState().addDoor(LIVING_ROOM_ID, 'right')
+    useHouseStore.getState().updateDoor(LIVING_ROOM_ID, getRoom(LIVING_ROOM_ID).doors[0].id, { offset: 0.3 })
+
+    // slide Living Room down by 2m via moveRoomsTo instead of updateRoom — same adjacency math
+    useHouseStore.getState().moveRoomsTo([{ id: LIVING_ROOM_ID, x: 0, y: 2 }])
+
+    const livingRoom = getRoom(LIVING_ROOM_ID)
+    const bedroom = getRoom(BEDROOM_ID)
+    expect(bedroom.doors[0].offset).toBeCloseTo(0.3)
+    expect(livingRoom.doors[0].offset).toBeCloseTo((3 - 2) / 10)
+  })
+
+  it('resyncs doors for every room in the batch, not just the first', () => {
+    useHouseStore.getState().addRoom('rect') // third room, no adjacency to either — id 3
+    const thirdId = useHouseStore.getState().rooms[2].id
+    useHouseStore.getState().updateRoom(thirdId, { x: 12, y: 20, width: 10, height: 10 })
+    useHouseStore.getState().addDoor(thirdId, 'top') // no adjacent room on this wall
+
+    useHouseStore.getState().addDoor(LIVING_ROOM_ID, 'right')
+    useHouseStore.getState().updateDoor(LIVING_ROOM_ID, getRoom(LIVING_ROOM_ID).doors[0].id, { offset: 0.3 })
+
+    // move Living Room (has a shared door to resync) and the third room (doesn't) in the same call
+    useHouseStore.getState().moveRoomsTo([
+      { id: LIVING_ROOM_ID, x: 0, y: 2 },
+      { id: thirdId, x: 12, y: 30 },
+    ])
+
+    expect(getRoom(LIVING_ROOM_ID).doors[0].offset).toBeCloseTo((3 - 2) / 10)
+    expect(getRoom(BEDROOM_ID).doors[0].offset).toBeCloseTo(0.3)
+    expect(getRoom(thirdId)).toMatchObject({ x: 12, y: 30 })
+  })
+})

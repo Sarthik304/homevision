@@ -6,6 +6,12 @@ import { getColors, font, radius } from '../../theme'
 import { SCALE, PADDING, MIN_ROOM_SIZE } from '../../constants/floorPlan'
 import { getLEdges, getLPolygon, MIN_NOTCH, L_WALL_KEYS, DEFAULT_L_WALLS } from '../../constants/lshape'
 import { rotateAround, getRoomAABB, getSnappedPosition } from '../../utils/roomGeometry'
+import {
+  SNAP_ANGLE_THRESHOLD_DEG,
+  computeWallBodyTranslate,
+  computeWallEndpointMove,
+  roomsInMarquee,
+} from '../../utils/interiorWallGeometry'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
@@ -13,9 +19,6 @@ const ZOOM_STEP = 1.15
 const HANDLE_SIZE = 9 // px, screen size of an edge resize handle
 const EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', left: 'ew-resize', right: 'ew-resize' }
 const L_EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', notchH: 'ns-resize', left: 'ew-resize', right: 'ew-resize', notchV: 'ew-resize' }
-const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
-const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
-const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — angle-snap distance, shared by interior wall endpoints and room rotation
 const INTERIOR_HANDLE_RADIUS = 7 // px — endpoint handle for rotating/stretching an interior wall
 const ROTATE_SNAP_DEG = 45 // degrees — increment a room's rotation handle "clicks" into
 const ROTATE_HANDLE_DIST = 24 // px above the room's (unrotated) top edge where its rotation handle sits
@@ -576,22 +579,6 @@ export default function FloorPlanEditor() {
     return { x: (pointer.x - stagePos.x) / stageScale, y: (pointer.y - stagePos.y) / stageScale }
   }
 
-  function roomsInMarquee(m) {
-    const minX = Math.min(m.x1, m.x2)
-    const maxX = Math.max(m.x1, m.x2)
-    const minY = Math.min(m.y1, m.y2)
-    const maxY = Math.max(m.y1, m.y2)
-    return rooms
-      .filter((room) => {
-        const rx1 = room.x * SCALE + PADDING
-        const ry1 = room.y * SCALE + PADDING
-        const rx2 = rx1 + room.width * SCALE
-        const ry2 = ry1 + room.height * SCALE
-        return rx1 < maxX && rx2 > minX && ry1 < maxY && ry2 > minY
-      })
-      .map((room) => room.id)
-  }
-
   // shift+drag on empty canvas draws a selection box instead of panning; shift+click a room
   // toggles it in/out of the multi-select set (see handleStageMouseDown/Move/Up and the room
   // Group's onClick below)
@@ -614,7 +601,7 @@ export default function FloorPlanEditor() {
   function handleStageMouseUp() {
     if (!marquee) return
     const dragDist = Math.hypot(marquee.x2 - marquee.x1, marquee.y2 - marquee.y1)
-    if (dragDist > 3) setSelectedRoomIds(roomsInMarquee(marquee))
+    if (dragDist > 3) setSelectedRoomIds(roomsInMarquee(rooms, marquee, SCALE, PADDING))
     setMarquee(null)
   }
 
@@ -842,19 +829,7 @@ export default function FloorPlanEditor() {
 
     const dxM = e.target.x() / SCALE
     const dyM = e.target.y() / SCALE
-    const minDx = -Math.min(gd.x1, gd.x2)
-    const maxDx = gd.roomWidth - Math.max(gd.x1, gd.x2)
-    const minDy = -Math.min(gd.y1, gd.y2)
-    const maxDy = gd.roomHeight - Math.max(gd.y1, gd.y2)
-    const clampedDx = Math.min(maxDx, Math.max(minDx, dxM))
-    const clampedDy = Math.min(maxDy, Math.max(minDy, dyM))
-
-    return {
-      x1: gd.x1 + clampedDx,
-      y1: gd.y1 + clampedDy,
-      x2: gd.x2 + clampedDx,
-      y2: gd.y2 + clampedDy,
-    }
+    return computeWallBodyTranslate(gd, gd.roomWidth, gd.roomHeight, dxM, dyM)
   }
 
   function handleInteriorWallBodyMove(e, roomId, wallId) {
@@ -876,66 +851,19 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // snaps a dragged endpoint to room corners / other walls' endpoints first, else to the nearest 45°
-  function snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY) {
-    const candidates = [
-      { x: 0, y: 0 },
-      { x: room.width, y: 0 },
-      { x: 0, y: room.height },
-      { x: room.width, y: room.height },
-    ]
-    ;(room.interiorWalls ?? []).forEach((w) => {
-      if (w.id === wall.id) return
-      candidates.push({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 })
-    })
-
-    let bestPoint = null
-    let bestDist = SNAP_POINT_THRESHOLD
-    candidates.forEach((p) => {
-      const d = Math.hypot(rawX - p.x, rawY - p.y)
-      if (d < bestDist) {
-        bestDist = d
-        bestPoint = p
-      }
-    })
-    if (bestPoint) return bestPoint
-
-    const dist = Math.hypot(rawX - otherX, rawY - otherY)
-    if (dist < 0.001) return { x: rawX, y: rawY }
-    const angle = Math.atan2(rawY - otherY, rawX - otherX)
-    const step = Math.PI / 4
-    const nearestAngle = Math.round(angle / step) * step
-    const diffDeg = Math.abs(Math.atan2(Math.sin(angle - nearestAngle), Math.cos(angle - nearestAngle))) * (180 / Math.PI)
-    if (diffDeg <= SNAP_ANGLE_THRESHOLD_DEG) {
-      return { x: otherX + Math.cos(nearestAngle) * dist, y: otherY + Math.sin(nearestAngle) * dist }
-    }
-    return { x: rawX, y: rawY }
-  }
-
   function moveInteriorWallEndpoint(e, roomId, wallId, endpoint) {
     const found = findInteriorWall(roomId, wallId)
     if (!found) return null
     const { room, wall } = found
-    const otherX = endpoint === 'a' ? wall.x2 : wall.x1
-    const otherY = endpoint === 'a' ? wall.y2 : wall.y1
 
-    const rawX = Math.min(room.width, Math.max(0, e.target.x() / SCALE))
-    const rawY = Math.min(room.height, Math.max(0, e.target.y() / SCALE))
-    const snapped = snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY)
-
-    let x = Math.min(room.width, Math.max(0, snapped.x))
-    let y = Math.min(room.height, Math.max(0, snapped.y))
-
-    if (Math.hypot(x - otherX, y - otherY) < MIN_INTERIOR_WALL_LENGTH) {
-      const angle = Math.atan2(y - otherY, x - otherX)
-      x = otherX + Math.cos(angle) * MIN_INTERIOR_WALL_LENGTH
-      y = otherY + Math.sin(angle) * MIN_INTERIOR_WALL_LENGTH
-    }
+    const rawX = e.target.x() / SCALE
+    const rawY = e.target.y() / SCALE
+    const { x, y, updates } = computeWallEndpointMove(room, wall, endpoint, rawX, rawY)
 
     e.target.x(x * SCALE)
     e.target.y(y * SCALE)
 
-    return endpoint === 'a' ? { x1: x, y1: y } : { x2: x, y2: y }
+    return updates
   }
 
   function handleInteriorWallEndpointMove(e, roomId, wallId, endpoint) {
