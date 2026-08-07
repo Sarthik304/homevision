@@ -5,8 +5,8 @@ import FloorPlanEditor from './components/editor/FloorPlanEditor'
 import useHouseStore from './store/useHouseStore'
 import { getColors } from './theme'
 
-// three.js + @react-three/fiber + drei are ~5MB and only needed once someone opens the 3D view —
-// lazy() defers fetching/parsing that whole chunk until then, instead of it loading on every visit
+// three.js + @react-three/fiber + drei (~5MB) are only needed for the 3D view — lazy() defers
+// loading them until it's opened
 const HouseViewer = lazy(() => import('./components/3d/HouseViewer'))
 
 export default function App() {

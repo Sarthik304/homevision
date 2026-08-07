@@ -14,10 +14,9 @@ export function rotateAround(px, py, cx, cy, deg) {
   return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
 }
 
-// a room rotated by a multiple of 90° is still perfectly axis-aligned on screen — 90°/270° just
-// swap which of its own width/height reads as "wide" — so it can still snap edge-to-edge against
-// other rooms. Anything off that grid (45°, etc.) genuinely isn't a rectangle in screen space
-// anymore, so it's excluded entirely (returns null) rather than snapping against a fake box.
+// a room rotated by a multiple of 90° is still axis-aligned on screen — 90°/270° just swap which
+// of its width/height reads as "wide" — so it can still snap against other rooms. Anything off
+// that grid isn't a rectangle in screen space anymore, so it's excluded (returns null) entirely.
 export function getRoomAABB(room) {
   const rotation = (((room.rotation ?? 0) % 360) + 360) % 360
   if (rotation % 90 !== 0) return null
@@ -74,9 +73,8 @@ export function getSnappedPosition(room, otherRooms, x, y) {
     }
   })
 
-  // corner-to-corner snapping: when a corner of the dragged room lands close to a corner of
-  // another room (no shared overlapping edge required, e.g. two rooms diagonal from each other),
-  // pull the dragged room so the two corners coincide exactly, keeping the shared walls straight.
+  // corner-to-corner snapping: when a corner of the dragged room lands near another room's corner
+  // (no shared edge needed, e.g. diagonal rooms), pull it so the two corners coincide exactly.
   const draggedCorners = [
     { x, y },
     { x: x + w, y },

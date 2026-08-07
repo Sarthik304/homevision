@@ -3,8 +3,7 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 
 export default function Navbar() {
-  // useShallow subscribes only to these fields (shallow-compared), instead of re-rendering the
-  // navbar on every store change (e.g. a room being dragged in the 2D view)
+  // useShallow avoids re-rendering on unrelated store changes (e.g. dragging a room)
   const { activeView, setActiveView, darkMode, toggleDarkMode, unit, toggleUnit } = useHouseStore(
     useShallow((s) => ({
       activeView: s.activeView,

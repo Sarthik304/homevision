@@ -1,8 +1,7 @@
 import { Component } from 'react'
 
-// Catches render errors anywhere below it so a bad state (e.g. a malformed room from a future
-// import/paste feature) shows a recoverable message instead of a blank white screen. Must be a
-// class component — React has no hook equivalent for getDerivedStateFromError/componentDidCatch.
+// Catches render errors below it, showing a recoverable message instead of a blank screen.
+// Must be a class component — no hook equivalent for getDerivedStateFromError/componentDidCatch.
 export default class ErrorBoundary extends Component {
   state = { error: null }
 

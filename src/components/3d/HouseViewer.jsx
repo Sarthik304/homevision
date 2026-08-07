@@ -18,8 +18,7 @@ function getWallColor(room, kind, key) {
   return wall?.color ?? room.wallColor
 }
 
-// keeps HouseViewer from re-rendering on store changes it doesn't care about — useShallow only
-// re-renders it when one of these specific fields actually changes
+// useShallow avoids re-rendering on unrelated store changes
 const selectHouseViewerState = (s) => ({
   rooms: s.rooms,
   selectedRoomId: s.selectedRoomId,
@@ -72,9 +71,8 @@ export default function HouseViewer() {
     closeColorPicker()
   }
 
-  // rooms are stored in absolute 2D coordinates (which can drift far from the origin as the
-  // plan grows), so re-center the whole house on its bounding-box middle before rendering it,
-  // keeping it in the middle of the grid instead of off in a corner
+  // rooms use absolute 2D coords that can drift far from the origin — recenter on the
+  // bounding-box middle so the house stays on the grid instead of drifting off it
   const houseOffset = (() => {
     if (rooms.length === 0) return [0, 0]
     const bounds = rooms.reduce(

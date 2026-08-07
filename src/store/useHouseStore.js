@@ -17,9 +17,8 @@ const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 't
 const ADJACENCY_TOLERANCE = 0.05 // meters — how close two rooms' boundary walls must sit to count as one shared wall
 
 // finds the neighboring room whose boundary wall sits flush against room's wallKey edge (e.g. two
-// rooms snapped side by side), so a door placed there can double as an opening in both walls.
-// L-shaped and rotated rooms sit out of this entirely — an L's outer walls don't line up with
-// mirrorOffset's rectangle-only math, and a rotated room's walls aren't axis-aligned at all.
+// rooms snapped side by side), so a door there can double as an opening in both walls. L-shaped
+// and rotated rooms are excluded — mirrorOffset's math is rectangle-only, and rotated walls aren't axis-aligned.
 function findAdjacentWall(rooms, room, wallKey) {
   if (room.shape === 'L' || room.rotation) return null
   const otherWallKey = WALL_ADJACENCY[wallKey]
@@ -42,17 +41,14 @@ function findAdjacentWall(rooms, room, wallKey) {
   return other ? { room: other, wallKey: otherWallKey } : null
 }
 
-// meters — reuses the app's existing drag-snap distance (see SNAP_THRESHOLD in utils/roomGeometry):
-// if two rooms are already within "would have snapped together while dragging" range, removing
-// the wall between them should close that last bit of gap too. Otherwise each room's floor still
-// only covers its own footprint, and the strip of workspace between them — previously hidden
-// behind the wall that just got removed — is left showing through as a blank gap.
+// meters — reuses SNAP_THRESHOLD's drag-snap distance (utils/roomGeometry): removing a wall
+// between rooms already within "would have snapped" range should close that gap too, or the
+// strip of floor between them — previously hidden behind that wall — shows through as a blank hole.
 const NEARBY_GAP_TOLERANCE = 0.6
 
-// like findAdjacentWall, but for a room with a small GAP (not touching) across wallKey — used only
-// when that wall is being removed, to pull the room flush against its neighbor and close the gap.
-// Unlike findAdjacentWall, doesn't require the neighbor to still have its own facing wall: the gap
-// is a floor problem regardless of whether a wall happens to be covering either side of it.
+// like findAdjacentWall, but for a room with a small GAP (not touching) across wallKey — used when
+// that wall is removed, to pull the room flush and close the gap. Unlike findAdjacentWall, doesn't
+// require the neighbor to still have its facing wall: the gap is a floor problem either way.
 function findNearbyRoomAcrossGap(rooms, room, wallKey) {
   if (room.shape === 'L' || room.rotation) return null
   let nearest = null
@@ -90,10 +86,9 @@ function mirrorOffset(room, wallKey, offset, otherRoom) {
   return Math.min(1, Math.max(0, raw))
 }
 
-// after `room`'s geometry changes (dragged or resized), re-aligns any shared doorway (see addDoor)
-// by pulling room's own door back onto the matching door of whichever neighbor is still adjacent —
-// the neighbor didn't move, so it stays the fixed reference; only the room that moved needs to
-// recompute its offset to keep sitting at the same physical spot on the shared wall
+// after `room`'s geometry changes, re-aligns any shared doorway (see addDoor) onto the matching
+// door of whichever neighbor is still adjacent — the neighbor didn't move, so it's the fixed
+// reference; only the moved room recomputes its offset to keep the doorway's physical position.
 function resyncSharedDoors(rooms, room) {
   let changed = false
   const doors = room.doors.map((d) => {
@@ -172,18 +167,16 @@ const useHouseStore = create((set) => ({
   ],
 
   selectedRoomId: null,
-  // ids of every room currently multi-selected in the 2D view (see selectRoom/toggleRoomSelection/
-  // setSelectedRoomIds) — dragging any one of them in FloorPlanEditor moves the whole set together.
-  // Single-selecting a room always keeps this in sync as a one-element array, so `isSelected`
-  // checks in the renderer only ever need to look at this list.
+  // ids of every room multi-selected in the 2D view — dragging any one moves the whole set
+  // together in FloorPlanEditor (see selectRoom/toggleRoomSelection/setSelectedRoomIds).
+  // Single-selecting keeps this in sync as a one-element array, so `isSelected` checks need only this.
   selectedRoomIds: [],
   selectedInteriorWallId: null,
   selectedBoundaryWallKey: null,
   activeView: '2d',
   darkMode: false,
-  // display-only unit for every length shown/typed in the UI ('m' or 'ft') — all room geometry
-  // is always stored in meters (see utils/units.js); this never touches stored values, only how
-  // Sidebar/FloorPlanEditor format them for display and parse typed input back into meters
+  // display-only unit for lengths shown/typed in the UI ('m' or 'ft') — room geometry is always
+  // stored in meters (utils/units.js); this only affects how Sidebar/FloorPlanEditor format/parse it.
   unit: 'm',
   // room-space point currently centered in the 2D viewport, kept in sync by FloorPlanEditor;
   // new rooms/floors spawn here so they appear where the user is looking, not off in a corner
@@ -195,9 +188,8 @@ const useHouseStore = create((set) => ({
 
   setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 
-  // selecting a room clears any wall selection, and vice versa (see selectInteriorWall/selectBoundaryWall).
-  // Also resets the multi-select set to just this room (or empty, if deselecting) so a plain click
-  // always leaves selectedRoomIds consistent with selectedRoomId.
+  // selecting a room clears any wall selection and resets the multi-select set to just this room
+  // (or empty, if deselecting), keeping selectedRoomIds consistent with selectedRoomId.
   selectRoom: (id) =>
     set({
       selectedRoomId: id,
@@ -206,9 +198,8 @@ const useHouseStore = create((set) => ({
       selectedBoundaryWallKey: null,
     }),
 
-  // shift-click a room to add/remove it from the multi-select set without disturbing the rest.
-  // selectedRoomId mirrors the set only while it has exactly one member, so the sidebar's
-  // per-room detail editor shows up only when editing makes sense for a single room.
+  // shift-click a room to add/remove it from the multi-select set. selectedRoomId mirrors the set
+  // only while it has exactly one member, so the sidebar's per-room editor only shows for a single room.
   toggleRoomSelection: (id) =>
     set((state) => {
       const selectedRoomIds = state.selectedRoomIds.includes(id)
@@ -419,9 +410,8 @@ const useHouseStore = create((set) => ({
       }
     }),
 
-  // door ids are unique across the whole plan, so removing by id also clears a shared doorway's
-  // other half — but only once we've confirmed roomId actually owns doorId, so a stale/mismatched
-  // id from the caller can't wipe out an unrelated door elsewhere in the plan
+  // door ids are unique plan-wide, so removing by id also clears a shared doorway's other half —
+  // but only once roomId is confirmed to own doorId, so a stale/mismatched id can't wipe out an unrelated door.
   removeDoor: (roomId, doorId) =>
     set((state) => {
       const room = state.rooms.find((r) => r.id === roomId)

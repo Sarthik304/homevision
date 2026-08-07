@@ -94,7 +94,6 @@ function getBoundaryWallColor(room, key) {
   return (room.wallColors ?? {})[key] ?? room.wallColor
 }
 
-// per-wall colour swatches for the selected room's boundary walls
 function WallColorSwatches({ room, availableWalls, updateWallColor, colorTarget, setColorTarget, color }) {
   const fieldLabel = getFieldLabel(color)
 
@@ -421,8 +420,7 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
   )
 }
 
-// keeps the Sidebar from re-rendering on every store change (e.g. dragging a room in the 2D
-// view) — useShallow only re-renders it when one of these specific fields actually changes
+// useShallow avoids re-rendering on unrelated store changes (e.g. dragging a room)
 const selectSidebarState = (s) => ({
   rooms: s.rooms,
   selectedRoomId: s.selectedRoomId,

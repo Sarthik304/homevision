@@ -1,17 +1,15 @@
 // Pure geometry for interior-wall drag/stretch and marquee selection, extracted from
-// FloorPlanEditor so it can be unit tested without pulling in Konva. Keeping this pure is what
-// makes the "runaway drag" class of bug (see computeWallBodyTranslate) testable at all — it only
-// showed up once real per-frame Konva event state was in the mix.
+// FloorPlanEditor so it's unit-testable without Konva — which is what makes the "runaway drag"
+// bug (see computeWallBodyTranslate) catchable at all; it only showed up with real per-frame Konva state.
 
 export const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
 export const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
 export const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — angle-snap distance, shared by interior wall endpoints and room rotation
 
 // translates a wall's ORIGINAL endpoints (snapshotted once at drag-start — see wallBodyDragRef in
-// FloorPlanEditor) by (dxM, dyM), clamped so neither endpoint leaves the room. Must be applied to
-// the drag's fixed starting point, never to whatever's currently in the store — Konva reports
-// (dxM, dyM) as the TOTAL offset since the drag began, not a per-frame delta, so adding it onto an
-// already-updated position double-counts every frame and the wall accelerates away from the cursor.
+// FloorPlanEditor) by (dxM, dyM), clamped so neither endpoint leaves the room. Must apply to that
+// fixed starting point, not the live store value — Konva reports (dxM, dyM) as the TOTAL offset
+// since drag-start, so adding it onto an already-updated position double-counts every frame.
 export function computeWallBodyTranslate(origin, roomWidth, roomHeight, dxM, dyM) {
   const minDx = -Math.min(origin.x1, origin.x2)
   const maxDx = roomWidth - Math.max(origin.x1, origin.x2)

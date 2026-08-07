@@ -114,8 +114,8 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
-// same rendering as RoomWalls, generalized to an L-shaped room's 6 edges (see constants/lshape) —
-// walks each edge's own direction/normal instead of relying on the fixed top/bottom/left/right cases
+// same rendering as RoomWalls, generalized to an L-shaped room's 6 edges — walks each edge's own
+// direction/normal instead of the fixed top/bottom/left/right cases (see constants/lshape)
 function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color }) {
   const walls = room.walls ?? DEFAULT_L_WALLS
   const doors = room.doors ?? []
@@ -273,9 +273,8 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
           )
         })}
 
-        {/* click target + drag rail for translating the whole wall — always draggable, same as a
-            room's own body, so grabbing an unselected wall moves it immediately instead of
-            requiring a select-then-drag two-step */}
+        {/* click target + drag rail for the whole wall — draggable even unselected, so grabbing
+            it moves it immediately instead of requiring a select-then-drag two-step */}
         <Line
           points={[x1px, y1px, x2px, y2px]}
           stroke={color.brand}
@@ -326,8 +325,8 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
   })
 }
 
-// x/y is the handle's target midpoint in stage-pixel space; positioning math lives with each
-// caller (rectangle vs L-shape edges compute their midpoints differently) so this stays a dumb node
+// x/y is the handle's target midpoint in stage-pixel space; each caller computes that midpoint
+// differently (rectangle vs L-shape edges), so this stays a dumb node
 function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResizeEnd }) {
   return (
     <Rect
@@ -353,8 +352,8 @@ function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResiz
   )
 }
 
-// midpoint (in whatever unit pixelW/pixelH/pixelNW/pixelNH are given, offset by pixelX/pixelY) of
-// one of an L-shaped room's 6 edges — shared by the resize handles and the drag-resize math itself
+// midpoint of one of an L-shaped room's 6 edges, offset by pixelX/pixelY — shared by the resize
+// handles and the drag-resize math itself
 function lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edgeKey) {
   const edge = getLEdges(pixelW, pixelH, pixelNW, pixelNH).find((e) => e.key === edgeKey)
   return [pixelX + (edge.from.x + edge.to.x) / 2, pixelY + (edge.from.y + edge.to.y) / 2]
@@ -385,8 +384,7 @@ function ZoomButton({ children, onClick, title, color }) {
   )
 }
 
-// keeps FloorPlanEditor from re-rendering on store changes it doesn't care about — useShallow
-// only re-renders it when one of these specific fields actually changes
+// useShallow avoids re-rendering on unrelated store changes
 const selectFloorPlanState = (s) => ({
   rooms: s.rooms,
   selectedRoomId: s.selectedRoomId,
@@ -429,11 +427,11 @@ export default function FloorPlanEditor() {
   const [isShiftHeld, setIsShiftHeld] = useState(false)
   // rubber-band selection box, in world-pixel space (same space as room pixelX/pixelY below)
   const [marquee, setMarquee] = useState(null)
-  // snapshot taken at the start of a group drag: which room started the drag, its pointer-space
-  // start position, and every selected room's starting (x, y) in meters — see handleGroupDragMove
+  // snapshot at group-drag start: which room started it, its pointer-space start position, and
+  // every selected room's starting (x, y) in meters — see handleGroupDragMove
   const groupDragRef = useRef(null)
-  // same "snapshot the start, then add Konva's cumulative-since-start offset" pattern as
-  // groupDragRef, for translating a whole interior wall — see startInteriorWallBodyDrag
+  // same start-snapshot pattern as groupDragRef, for translating a whole interior wall — see
+  // startInteriorWallBodyDrag
   const wallBodyDragRef = useRef(null)
 
   useEffect(() => {
@@ -470,13 +468,10 @@ export default function FloorPlanEditor() {
     return () => observer.disconnect()
   }, [])
 
-  // rooms rotated off the 90° grid (see getRoomAABB) opt out of axis-aligned snapping entirely —
-  // their own drag, and everyone else's snapping against them.
-  // the room Group is positioned by its CENTER (x/y) with an offsetX/Y of half its size, so Konva
-  // rotates it around its middle — e.target.x()/y() during a drag report that center. Snapping
-  // itself works in terms of each room's AABB (which for a 90°/270° room has width/height
-  // swapped from its stored room.width/height), then converts back to the center for e.target
-  // and finally to the stored room.x/y (relative to the room's OWN, unswapped width/height).
+  // rooms off the 90° grid (see getRoomAABB) skip axis-aligned snapping entirely, both for their
+  // own drag and others snapping against them. The room Group is positioned by its CENTER (Konva
+  // rotates around it), so e.target.x()/y() report that center; snapping works in AABB terms
+  // (width/height swapped for a 90°/270° room), then converts back to center and to the room's own x/y.
   function handleDragMove(e, roomId) {
     // ignore drags bubbling up from a nested interior wall, only handle the room Group's own drag
     if (e.target !== e.currentTarget) return
@@ -519,10 +514,9 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // when the room being grabbed is part of a multi-selection, the whole set translates together
-  // by the same raw pixel delta (no snapping — snapping a rigid group against itself doesn't make
-  // sense, and against other rooms would only ever align the one room under the pointer). A single
-  // selected room still goes through the existing snap-to-neighbor path in handleDragMove/End.
+  // when the grabbed room is part of a multi-selection, the whole set translates together by the
+  // same raw pixel delta — no snapping, since it'd only ever align the one room under the pointer.
+  // A single selected room still uses handleDragMove/End's snap-to-neighbor path.
   function startGroupDrag(e, roomId) {
     if (e.target !== e.currentTarget) return
     if (selectedRoomIds.length < 2 || !selectedRoomIds.includes(roomId)) {
@@ -583,8 +577,7 @@ export default function FloorPlanEditor() {
   }
 
   // shift+drag on empty canvas draws a selection box instead of panning; shift+click a room
-  // toggles it in/out of the multi-select set (see handleStageMouseDown/Move/Up and the room
-  // Group's onClick below)
+  // toggles it in the multi-select set (see the room Group's onClick below)
   function handleStageMouseDown(e) {
     if (!isShiftHeld) return
     const stage = e.target.getStage()
@@ -685,10 +678,9 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // same idea as resizeRoomForEdge, but for an L-shaped room's 6 edges: the 4 outer edges
-  // (top/bottom/left/right) resize the bounding box exactly like a rectangle's, while the two
-  // notch edges (notchV/notchH) instead grow or shrink how deep the notch cuts into that box.
-  // Each outer edge is clamped to leave room for the notch, and vice versa, so the L never inverts.
+  // same idea as resizeRoomForEdge, but for an L-shaped room's 6 edges: the 4 outer edges resize
+  // the bounding box like a rectangle's, while notchV/notchH instead grow or shrink the notch.
+  // Each is clamped against the other so the L never inverts.
   function resizeLRoomForEdge(e, roomId, edge) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -757,11 +749,9 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // angle of the drag handle relative to the room's center, 0° = straight up, increasing clockwise
-  // (matching Konva's own `rotation` direction) — snaps to the nearest 45° within a few degrees,
-  // same threshold snapInteriorWallEndpoint uses for its own 45° angle snap, so both "click" alike.
-  // Repositions the handle back onto its orbit circle at the resulting angle, same pattern the
-  // resize handles use to snap back onto their edge midpoint after a drag.
+  // angle of the drag handle relative to the room's center — 0° is straight up, increasing
+  // clockwise (matching Konva's `rotation`) — snapped to the nearest 45° within
+  // SNAP_ANGLE_THRESHOLD_DEG, then repositions the handle back onto its orbit circle at that angle.
   function computeRoomRotation(e, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -802,14 +792,11 @@ export default function FloorPlanEditor() {
     return { room, wall }
   }
 
-  // Konva's drag rail reports its position as the TOTAL offset from wherever the drag began
-  // (fixed at drag-start, not a per-frame delta — see Node.js's _setDragPosition/_createDragElement),
-  // so the body-translate math has to add that total offset onto the wall's ORIGINAL position, not
-  // onto whatever the store already holds (which the previous move already updated). Adding it to
-  // the live store value double-counts every frame — each new total-since-start offset stacks on
-  // top of the previous frame's already-applied offset — and the wall accelerates away from the
-  // cursor within a few frames. Snapshotting start position once (here) and reusing it for the
-  // whole gesture (below) is the same fix applied to multi-room group dragging (see groupDragRef).
+  // Konva reports drag position as the TOTAL offset since drag-start, not a per-frame delta, so
+  // this must add that offset onto the wall's ORIGINAL position — adding it onto the live store
+  // value (already updated by the previous move) double-counts every frame and the wall
+  // accelerates away from the cursor. Snapshotting the start once (here) is the same fix
+  // groupDragRef uses for multi-room dragging.
   function startInteriorWallBodyDrag(roomId, wallId) {
     const found = findInteriorWall(roomId, wallId)
     if (!found) return

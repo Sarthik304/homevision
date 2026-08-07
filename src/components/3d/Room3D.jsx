@@ -37,9 +37,8 @@ function computeOpenings(length, doors, windows) {
   return openings
 }
 
-// clips segments to [trimStart, length - trimEnd] so adjacent walls butt-join
-// instead of overlapping at the corner (overlapping opaque geometry z-fights,
-// which is invisible with matching wall colors but flickers when they differ)
+// clips segments to [trimStart, length - trimEnd] so adjacent walls butt-join instead of
+// overlapping (which z-fights — invisible with matching wall colors, but flickers when they differ)
 function clipSegments(segments, trimStart, trimEnd, length) {
   const lo = trimStart
   const hi = length - trimEnd
@@ -97,9 +96,8 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-// flat L-shaped mesh for the floor/ceiling. `flipY` accounts for the floor and ceiling using
-// opposite X rotations to face the right way, which mirrors how a plane's local Y axis ends up
-// mapped onto world Z — see the floor/ceiling meshes below for the matching rotation each expects.
+// flat L-shaped mesh for the floor/ceiling. `flipY` compensates for the floor/ceiling using
+// opposite X rotations (see the meshes below), which flips how their local Y maps onto world Z.
 function buildLShape(width, height, notchWidth, notchHeight, flipY) {
   const points = getLPolygon(width, height, notchWidth, notchHeight)
   const shape = new Shape()
@@ -187,8 +185,6 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
     [isL, width, height, notchWidth, notchHeight]
   )
 
-  // left/right walls are trimmed by the top/bottom walls' thickness at each end so
-  // their boxes butt-join at the corners instead of overlapping (see clipSegments)
   const wallDefs = isL ? getLWallDefs(width, height, notchWidth, notchHeight) : getRectWallDefs(width, height)
 
   return (
