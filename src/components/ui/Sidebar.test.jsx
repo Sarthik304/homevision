@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import Sidebar from './Sidebar'
 import useHouseStore from '../../store/useHouseStore'
 
@@ -80,6 +80,30 @@ describe('editing a selected room', () => {
     expect(getRoom(LIVING_ROOM_ID)).toBeUndefined()
     expect(useHouseStore.getState().selectedRoomId).toBeNull()
     expect(screen.queryByText('Living Room')).not.toBeInTheDocument()
+  })
+})
+
+describe('unit toggle', () => {
+  beforeEach(() => {
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+  })
+
+  it('switching to feet relabels the width field and shows the converted value', () => {
+    render(<Sidebar />)
+    act(() => useHouseStore.getState().toggleUnit())
+
+    expect(screen.getByText('Width (ft)')).toBeInTheDocument()
+    // Living Room is 12m wide -> 12 / 0.3048 = 39.3700... -> rounded to 2 decimals for feet
+    expect(screen.getByDisplayValue(39.37)).toBeInTheDocument()
+  })
+
+  it('typing a feet value stores the equivalent in meters', () => {
+    render(<Sidebar />)
+    act(() => useHouseStore.getState().toggleUnit())
+
+    fireEvent.change(screen.getByDisplayValue(39.37), { target: { value: '10' } })
+
+    expect(getRoom(LIVING_ROOM_ID).width).toBeCloseTo(3.048)
   })
 })
 

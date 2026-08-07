@@ -5,12 +5,14 @@ import { getColors, radius } from '../../theme'
 export default function Navbar() {
   // useShallow subscribes only to these fields (shallow-compared), instead of re-rendering the
   // navbar on every store change (e.g. a room being dragged in the 2D view)
-  const { activeView, setActiveView, darkMode, toggleDarkMode } = useHouseStore(
+  const { activeView, setActiveView, darkMode, toggleDarkMode, unit, toggleUnit } = useHouseStore(
     useShallow((s) => ({
       activeView: s.activeView,
       setActiveView: s.setActiveView,
       darkMode: s.darkMode,
       toggleDarkMode: s.toggleDarkMode,
+      unit: s.unit,
+      toggleUnit: s.toggleUnit,
     }))
   )
   const color = getColors(darkMode)
@@ -87,6 +89,23 @@ export default function Navbar() {
           ? 'Drag to rotate · Scroll to zoom · Right-click to pan'
           : 'Click a room to select · Drag to reposition'}
       </div>
+
+      <button
+        onClick={toggleUnit}
+        title="Toggle measurement unit"
+        style={{
+          padding: '6px 12px',
+          borderRadius: radius.sm,
+          border: `1px solid ${color.border}`,
+          background: color.surface,
+          color: color.text,
+          cursor: 'pointer',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {unit === 'ft' ? 'Feet' : 'Meters'}
+      </button>
 
       <button
         onClick={toggleDarkMode}

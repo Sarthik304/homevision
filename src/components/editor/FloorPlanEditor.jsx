@@ -12,6 +12,7 @@ import {
   computeWallEndpointMove,
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
+import { formatLength } from '../../utils/units'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
@@ -399,6 +400,7 @@ const selectFloorPlanState = (s) => ({
   selectInteriorWall: s.selectInteriorWall,
   updateInteriorWall: s.updateInteriorWall,
   darkMode: s.darkMode,
+  unit: s.unit,
   setViewCenter: s.setViewCenter,
 })
 
@@ -416,6 +418,7 @@ export default function FloorPlanEditor() {
     selectInteriorWall,
     updateInteriorWall,
     darkMode,
+    unit,
     setViewCenter,
   } = useHouseStore(useShallow(selectFloorPlanState))
   const color = getColors(darkMode)
@@ -1037,7 +1040,7 @@ export default function FloorPlanEditor() {
                 />
 
                 <Text
-                  text={`${room.width}m × ${room.height}m`}
+                  text={`${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`}
                   width={pixelW}
                   y={pixelH - 20}
                   align="center"

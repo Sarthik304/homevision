@@ -143,11 +143,17 @@ const useHouseStore = create((set) => ({
   selectedBoundaryWallKey: null,
   activeView: '2d',
   darkMode: false,
+  // display-only unit for every length shown/typed in the UI ('m' or 'ft') — all room geometry
+  // is always stored in meters (see utils/units.js); this never touches stored values, only how
+  // Sidebar/FloorPlanEditor format them for display and parse typed input back into meters
+  unit: 'm',
   // room-space point currently centered in the 2D viewport, kept in sync by FloorPlanEditor;
   // new rooms/floors spawn here so they appear where the user is looking, not off in a corner
   viewCenter: { x: 11, y: 5 },
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+
+  toggleUnit: () => set((state) => ({ unit: state.unit === 'm' ? 'ft' : 'm' })),
 
   setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 

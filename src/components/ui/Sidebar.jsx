@@ -5,6 +5,7 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { MIN_ROOM_SIZE } from '../../constants/floorPlan'
 import { getWallKeys, MIN_NOTCH } from '../../constants/lshape'
+import { formatLength, fromDisplayLength, roundDisplayLength } from '../../utils/units'
 
 const getSectionHeader = (color) => ({
   fontSize: 11,
@@ -151,7 +152,7 @@ function WallColorSwatches({ room, availableWalls, updateWallColor, colorTarget,
   )
 }
 
-function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, showPosition, color, removeLabel }) {
+function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, showPosition, color, unit, removeLabel }) {
   return (
     <div
       style={{
@@ -169,10 +170,10 @@ function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, 
         <span style={{ color: color.muted, fontSize: 11 }}>W</span>
         <input
           type="number"
-          value={item.width}
-          min={minWidth}
+          value={roundDisplayLength(item.width, unit)}
+          min={roundDisplayLength(minWidth, unit)}
           step={0.1}
-          onChange={(e) => onUpdate(item.id, { width: parseFloat(e.target.value) || minWidth })}
+          onChange={(e) => onUpdate(item.id, { width: fromDisplayLength(parseFloat(e.target.value), unit) || minWidth })}
           style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text, flex: label == null ? 1 : undefined }}
         />
         {minHeight != null && (
@@ -180,15 +181,15 @@ function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, 
             <span style={{ color: color.muted, fontSize: 11 }}>H</span>
             <input
               type="number"
-              value={item.height}
-              min={minHeight}
+              value={roundDisplayLength(item.height, unit)}
+              min={roundDisplayLength(minHeight, unit)}
               step={0.1}
-              onChange={(e) => onUpdate(item.id, { height: parseFloat(e.target.value) || minHeight })}
+              onChange={(e) => onUpdate(item.id, { height: fromDisplayLength(parseFloat(e.target.value), unit) || minHeight })}
               style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
             />
           </>
         )}
-        <span style={{ color: color.muted }}>m</span>
+        <span style={{ color: color.muted }}>{unit}</span>
         <button
           onClick={() => onRemove(item.id)}
           style={{
@@ -225,7 +226,7 @@ function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, 
   )
 }
 
-function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight, showPosition, color }) {
+function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, wallChoice, setWallChoice, minWidth, minHeight, showPosition, color, unit }) {
   const fieldLabel = getFieldLabel(color)
   const inputStyle = getInputStyle(color)
 
@@ -280,6 +281,7 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
               minHeight={minHeight}
               showPosition={showPosition}
               color={color}
+              unit={unit}
               removeLabel={`Remove ${title.toLowerCase()}`}
             />
           ))}
@@ -289,7 +291,7 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
   )
 }
 
-function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, color }) {
+function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, color, unit }) {
   const fieldLabel = getFieldLabel(color)
   const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1)
   const colorTargetKey = `interior:${wall.id}`
@@ -321,7 +323,7 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ flex: 1, fontSize: 12, color: color.text }}>Wall · {length.toFixed(1)}m</span>
+        <span style={{ flex: 1, fontSize: 12, color: color.text }}>Wall · {formatLength(length, unit)}</span>
         <div
           onClick={() => setColorTarget(isColorOpen ? null : colorTargetKey)}
           title="Wall colour"
@@ -338,12 +340,14 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
         <span style={{ color: color.muted, fontSize: 11 }}>Thickness</span>
         <input
           type="number"
-          value={wall.thickness}
-          min={0.05}
-          max={0.5}
+          value={roundDisplayLength(wall.thickness, unit)}
+          min={roundDisplayLength(0.05, unit)}
+          max={roundDisplayLength(0.5, unit)}
           step={0.01}
           onChange={(e) =>
-            actions.updateInteriorWall(room.id, wall.id, { thickness: parseFloat(e.target.value) || 0.05 })
+            actions.updateInteriorWall(room.id, wall.id, {
+              thickness: fromDisplayLength(parseFloat(e.target.value), unit) || 0.05,
+            })
           }
           style={{ width: 52, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.surface, color: color.text }}
         />
@@ -384,6 +388,7 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
               minWidth={0.3}
               showPosition
               color={color}
+              unit={unit}
               removeLabel="Remove door"
               onUpdate={(id, updates) => actions.updateInteriorDoor(room.id, wall.id, id, updates)}
               onRemove={(id) => actions.removeInteriorDoor(room.id, wall.id, id)}
@@ -404,6 +409,7 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
               minHeight={0.2}
               showPosition
               color={color}
+              unit={unit}
               removeLabel="Remove window"
               onUpdate={(id, updates) => actions.updateInteriorWindow(room.id, wall.id, id, updates)}
               onRemove={(id) => actions.removeInteriorWindow(room.id, wall.id, id)}
@@ -446,6 +452,7 @@ const selectSidebarState = (s) => ({
   updateInteriorWindow: s.updateInteriorWindow,
   removeInteriorWindow: s.removeInteriorWindow,
   darkMode: s.darkMode,
+  unit: s.unit,
 })
 
 export default function Sidebar() {
@@ -478,6 +485,7 @@ export default function Sidebar() {
     updateInteriorWindow,
     removeInteriorWindow,
     darkMode,
+    unit,
   } = useHouseStore(useShallow(selectSidebarState))
 
   const interiorWallActions = {
@@ -697,18 +705,17 @@ export default function Sidebar() {
             {['width', 'height'].map((dim) => (
               <div key={dim}>
                 <label style={fieldLabel}>
-                  {dim === 'width' ? 'Width (m)' : 'Depth (m)'}
+                  {dim === 'width' ? `Width (${unit})` : `Depth (${unit})`}
                 </label>
                 <input
                   type="number"
-                  value={selectedRoom[dim]}
-                  min={MIN_ROOM_SIZE}
+                  value={roundDisplayLength(selectedRoom[dim], unit)}
+                  min={roundDisplayLength(MIN_ROOM_SIZE, unit)}
                   step={0.1}
-                  onChange={(e) =>
-                    updateRoom(selectedRoom.id, {
-                      [dim]: Math.max(MIN_ROOM_SIZE, parseFloat(e.target.value) || MIN_ROOM_SIZE),
-                    })
-                  }
+                  onChange={(e) => {
+                    const meters = fromDisplayLength(parseFloat(e.target.value), unit) || MIN_ROOM_SIZE
+                    updateRoom(selectedRoom.id, { [dim]: Math.max(MIN_ROOM_SIZE, meters) })
+                  }}
                   style={inputStyle}
                 />
               </div>
@@ -722,19 +729,18 @@ export default function Sidebar() {
                 return (
                   <div key={dim}>
                     <label style={fieldLabel}>
-                      {dim === 'notchWidth' ? 'Notch width (m)' : 'Notch depth (m)'}
+                      {dim === 'notchWidth' ? `Notch width (${unit})` : `Notch depth (${unit})`}
                     </label>
                     <input
                       type="number"
-                      value={selectedRoom[dim]}
-                      min={MIN_NOTCH}
-                      max={cap}
+                      value={roundDisplayLength(selectedRoom[dim], unit)}
+                      min={roundDisplayLength(MIN_NOTCH, unit)}
+                      max={roundDisplayLength(cap, unit)}
                       step={0.1}
-                      onChange={(e) =>
-                        updateRoom(selectedRoom.id, {
-                          [dim]: Math.min(cap, Math.max(MIN_NOTCH, parseFloat(e.target.value) || MIN_NOTCH)),
-                        })
-                      }
+                      onChange={(e) => {
+                        const meters = fromDisplayLength(parseFloat(e.target.value), unit) || MIN_NOTCH
+                        updateRoom(selectedRoom.id, { [dim]: Math.min(cap, Math.max(MIN_NOTCH, meters)) })
+                      }}
                       style={inputStyle}
                     />
                   </div>
@@ -786,6 +792,7 @@ export default function Sidebar() {
             minWidth={0.3}
             showPosition
             color={color}
+            unit={unit}
           />
 
           <OpeningList
@@ -800,6 +807,7 @@ export default function Sidebar() {
             minWidth={0.2}
             minHeight={0.2}
             color={color}
+            unit={unit}
           />
 
           <div style={{ height: 1, background: color.border }} />
@@ -816,6 +824,7 @@ export default function Sidebar() {
                 colorTarget={colorTarget}
                 setColorTarget={setColorTarget}
                 color={color}
+                unit={unit}
               />
             ))}
 

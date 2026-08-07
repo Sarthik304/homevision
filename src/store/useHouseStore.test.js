@@ -16,6 +16,16 @@ function getRoom(id) {
   return useHouseStore.getState().rooms.find((r) => r.id === id)
 }
 
+describe('toggleUnit', () => {
+  it('toggles between meters and feet, defaulting to meters', () => {
+    expect(useHouseStore.getState().unit).toBe('m')
+    useHouseStore.getState().toggleUnit()
+    expect(useHouseStore.getState().unit).toBe('ft')
+    useHouseStore.getState().toggleUnit()
+    expect(useHouseStore.getState().unit).toBe('m')
+  })
+})
+
 describe('addDoor', () => {
   it('mirrors a door into the adjacent room on the matching wall', () => {
     useHouseStore.getState().addDoor(LIVING_ROOM_ID, 'right')
