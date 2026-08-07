@@ -42,6 +42,44 @@ function findAdjacentWall(rooms, room, wallKey) {
   return other ? { room: other, wallKey: otherWallKey } : null
 }
 
+// meters — reuses the app's existing drag-snap distance (see SNAP_THRESHOLD in utils/roomGeometry):
+// if two rooms are already within "would have snapped together while dragging" range, removing
+// the wall between them should close that last bit of gap too. Otherwise each room's floor still
+// only covers its own footprint, and the strip of workspace between them — previously hidden
+// behind the wall that just got removed — is left showing through as a blank gap.
+const NEARBY_GAP_TOLERANCE = 0.6
+
+// like findAdjacentWall, but for a room with a small GAP (not touching) across wallKey — used only
+// when that wall is being removed, to pull the room flush against its neighbor and close the gap.
+// Unlike findAdjacentWall, doesn't require the neighbor to still have its own facing wall: the gap
+// is a floor problem regardless of whether a wall happens to be covering either side of it.
+function findNearbyRoomAcrossGap(rooms, room, wallKey) {
+  if (room.shape === 'L' || room.rotation) return null
+  let nearest = null
+  let bestGap = NEARBY_GAP_TOLERANCE
+  rooms.forEach((r) => {
+    if (r.id === room.id || r.shape === 'L' || r.rotation) return
+    if (wallKey === 'right' || wallKey === 'left') {
+      const overlap = Math.min(room.y + room.height, r.y + r.height) - Math.max(room.y, r.y)
+      if (overlap <= 0) return
+      const gap = wallKey === 'right' ? r.x - (room.x + room.width) : room.x - (r.x + r.width)
+      if (gap >= 0 && gap < bestGap) {
+        bestGap = gap
+        nearest = { room: r, gap }
+      }
+    } else {
+      const overlap = Math.min(room.x + room.width, r.x + r.width) - Math.max(room.x, r.x)
+      if (overlap <= 0) return
+      const gap = wallKey === 'bottom' ? r.y - (room.y + room.height) : room.y - (r.y + r.height)
+      if (gap >= 0 && gap < bestGap) {
+        bestGap = gap
+        nearest = { room: r, gap }
+      }
+    }
+  })
+  return nearest
+}
+
 // converts a door's offset (0-1 fraction along room's wallKey edge) into the equivalent offset
 // along otherRoom's wall, using the shared physical position where the two walls touch
 function mirrorOffset(room, wallKey, offset, otherRoom) {
@@ -272,22 +310,45 @@ const useHouseStore = create((set) => ({
     }),
 
   toggleWall: (roomId, wallKey) =>
-    set((state) => ({
-      rooms: state.rooms.map((room) => {
+    set((state) => {
+      const originalRoom = state.rooms.find((r) => r.id === roomId)
+      if (!originalRoom) return {}
+      const wallNowPresent = !originalRoom.walls[wallKey]
+
+      let rooms = state.rooms.map((room) => {
         if (room.id !== roomId) return room
-        const wallNowPresent = !room.walls[wallKey]
         return {
           ...room,
           walls: { ...room.walls, [wallKey]: wallNowPresent },
           doors: wallNowPresent ? room.doors : room.doors.filter((d) => d.wall !== wallKey),
           windows: wallNowPresent ? room.windows : room.windows.filter((w) => w.wall !== wallKey),
         }
-      }),
-      selectedBoundaryWallKey:
-        state.selectedBoundaryWallKey === wallKey && state.selectedRoomId === roomId
-          ? null
-          : state.selectedBoundaryWallKey,
-    })),
+      })
+
+      // removing a wall that's covering a small gap to a nearby room would otherwise expose that
+      // gap as a blank hole in the floor — close it by pulling this room flush against its neighbor
+      if (!wallNowPresent) {
+        const nearby = findNearbyRoomAcrossGap(rooms, originalRoom, wallKey)
+        if (nearby && nearby.gap > 0) {
+          const dx = wallKey === 'right' ? nearby.gap : wallKey === 'left' ? -nearby.gap : 0
+          const dy = wallKey === 'bottom' ? nearby.gap : wallKey === 'top' ? -nearby.gap : 0
+          rooms = rooms.map((r) =>
+            r.id === roomId
+              ? { ...r, x: Math.round((r.x + dx) * 10) / 10, y: Math.round((r.y + dy) * 10) / 10 }
+              : r
+          )
+          rooms = resyncSharedDoors(rooms, rooms.find((r) => r.id === roomId))
+        }
+      }
+
+      return {
+        rooms,
+        selectedBoundaryWallKey:
+          state.selectedBoundaryWallKey === wallKey && state.selectedRoomId === roomId
+            ? null
+            : state.selectedBoundaryWallKey,
+      }
+    }),
 
   updateWallColor: (roomId, wallKey, color) =>
     set((state) => ({

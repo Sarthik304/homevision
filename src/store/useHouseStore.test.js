@@ -124,6 +124,56 @@ describe('removeDoor', () => {
   })
 })
 
+describe('toggleWall closing a gap to a nearby room', () => {
+  it('pulls the room flush against a nearby room when the facing wall is removed', () => {
+    // pull Bedroom 0.4m away from Living Room's right edge (still within snap-close range)
+    useHouseStore.getState().updateRoom(BEDROOM_ID, { x: 12.4 })
+
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right')
+
+    const livingRoom = getRoom(LIVING_ROOM_ID)
+    expect(livingRoom.x).toBeCloseTo(0.4)
+    expect(livingRoom.x + livingRoom.width).toBeCloseTo(getRoom(BEDROOM_ID).x)
+  })
+
+  it('leaves already-flush rooms untouched (no gap to close)', () => {
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right')
+
+    expect(getRoom(LIVING_ROOM_ID).x).toBe(0)
+    expect(getRoom(BEDROOM_ID).x).toBe(12)
+  })
+
+  it('does not snap rooms that are farther apart than the tolerance', () => {
+    useHouseStore.getState().updateRoom(BEDROOM_ID, { x: 20 }) // 8m gap, well beyond "nearby"
+
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right')
+
+    expect(getRoom(LIVING_ROOM_ID).x).toBe(0)
+  })
+
+  it('only closes the gap when the wall is being removed, not when re-adding it', () => {
+    useHouseStore.getState().updateRoom(BEDROOM_ID, { x: 12.4 })
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right') // removes it, snaps to x: 0.4
+
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right') // re-adds it
+
+    expect(getRoom(LIVING_ROOM_ID).x).toBeCloseTo(0.4) // stays snapped, doesn't move back
+    expect(getRoom(LIVING_ROOM_ID).walls.right).toBe(true)
+  })
+
+  it('drops its own door on the removed wall without crashing the gap-close (pre-existing toggleWall behavior — it does not also clear the mirrored door on the neighbor)', () => {
+    useHouseStore.getState().addDoor(LIVING_ROOM_ID, 'right') // rooms start flush, so this mirrors
+    useHouseStore.getState().updateRoom(BEDROOM_ID, { x: 12.3 }) // now just a 0.3m gap
+
+    useHouseStore.getState().toggleWall(LIVING_ROOM_ID, 'right')
+
+    expect(getRoom(LIVING_ROOM_ID).doors).toHaveLength(0)
+    // gap still closes correctly regardless of the door bookkeeping above
+    const livingRoom = getRoom(LIVING_ROOM_ID)
+    expect(livingRoom.x + livingRoom.width).toBeCloseTo(getRoom(BEDROOM_ID).x)
+  })
+})
+
 describe('entity ids', () => {
   it('never collides across rapid, same-tick creations', () => {
     const store = useHouseStore.getState()
