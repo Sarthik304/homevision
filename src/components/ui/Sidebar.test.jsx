@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import Sidebar from './Sidebar'
 import useHouseStore from '../../store/useHouseStore'
+import { roundDisplayLength } from '../../utils/units'
 
 const LIVING_ROOM_ID = 1
 const BEDROOM_ID = 2
@@ -48,12 +49,34 @@ describe('editing a selected room', () => {
     expect(getRoom(LIVING_ROOM_ID).name).toBe('Great Room')
   })
 
-  it('changing width/height updates the room and is clamped to MIN_ROOM_SIZE', () => {
+  it('changing width/height updates the room', () => {
+    render(<Sidebar />)
+    const widthInput = screen.getByDisplayValue(12)
+    fireEvent.change(widthInput, { target: { value: '8' } })
+
+    expect(getRoom(LIVING_ROOM_ID).width).toBe(8)
+  })
+
+  it('clamps width/height to MIN_ROOM_SIZE once the field is blurred', () => {
     render(<Sidebar />)
     const widthInput = screen.getByDisplayValue(12)
     fireEvent.change(widthInput, { target: { value: '0' } })
+    fireEvent.blur(widthInput)
 
     expect(getRoom(LIVING_ROOM_ID).width).toBe(1) // MIN_ROOM_SIZE
+  })
+
+  it('does not clamp mid-keystroke, so a multi-digit feet value can be typed', () => {
+    useHouseStore.setState({ unit: 'ft' })
+    render(<Sidebar />)
+    const widthInput = screen.getByDisplayValue(roundDisplayLength(12, 'ft'))
+
+    // Typing "12" one keystroke at a time: the first "1" (~0.3m) is below MIN_ROOM_SIZE (1m).
+    // It must not be clamped/overwritten before the second keystroke lands.
+    fireEvent.change(widthInput, { target: { value: '1' } })
+    fireEvent.change(widthInput, { target: { value: '12' } })
+
+    expect(widthInput.value).toBe('12')
   })
 
   it('toggling a wall off removes it from the doorway/window wall choices', () => {

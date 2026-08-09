@@ -54,6 +54,41 @@ const WALL_LABELS = {
   notchH: 'Notch (top)',
 }
 
+// Keeps its own text while focused so a keystroke that dips below `min` (e.g. typing "1" of "12"
+// while feet's min of ~3.28 sits mid-number) isn't immediately clamped and overwritten mid-type.
+// Only clamps to [min, max] on blur, once the user is done typing.
+function DimensionInput({ valueMeters, unit, min, max, onCommit, style }) {
+  const [text, setText] = useState(() => String(roundDisplayLength(valueMeters, unit)))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (!focused) setText(String(roundDisplayLength(valueMeters, unit)))
+  }, [valueMeters, unit, focused])
+
+  return (
+    <input
+      type="number"
+      value={text}
+      min={roundDisplayLength(min, unit)}
+      max={max != null ? roundDisplayLength(max, unit) : undefined}
+      step={0.1}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => {
+        setText(e.target.value)
+        const meters = fromDisplayLength(parseFloat(e.target.value), unit)
+        if (Number.isFinite(meters)) onCommit(meters)
+      }}
+      onBlur={(e) => {
+        setFocused(false)
+        const parsed = fromDisplayLength(parseFloat(e.target.value), unit)
+        const clamped = Math.min(max ?? Infinity, Math.max(min, Number.isFinite(parsed) ? parsed : min))
+        onCommit(clamped)
+      }}
+      style={style}
+    />
+  )
+}
+
 function WallToggles({ room, toggleWall, color }) {
   const fieldLabel = getFieldLabel(color)
   const wallKeys = getWallKeys(room)
@@ -705,15 +740,11 @@ export default function Sidebar() {
                 <label style={fieldLabel}>
                   {dim === 'width' ? `Width (${unit})` : `Depth (${unit})`}
                 </label>
-                <input
-                  type="number"
-                  value={roundDisplayLength(selectedRoom[dim], unit)}
-                  min={roundDisplayLength(MIN_ROOM_SIZE, unit)}
-                  step={0.1}
-                  onChange={(e) => {
-                    const meters = fromDisplayLength(parseFloat(e.target.value), unit) || MIN_ROOM_SIZE
-                    updateRoom(selectedRoom.id, { [dim]: Math.max(MIN_ROOM_SIZE, meters) })
-                  }}
+                <DimensionInput
+                  valueMeters={selectedRoom[dim]}
+                  unit={unit}
+                  min={MIN_ROOM_SIZE}
+                  onCommit={(meters) => updateRoom(selectedRoom.id, { [dim]: meters })}
                   style={inputStyle}
                 />
               </div>
@@ -729,16 +760,12 @@ export default function Sidebar() {
                     <label style={fieldLabel}>
                       {dim === 'notchWidth' ? `Notch width (${unit})` : `Notch depth (${unit})`}
                     </label>
-                    <input
-                      type="number"
-                      value={roundDisplayLength(selectedRoom[dim], unit)}
-                      min={roundDisplayLength(MIN_NOTCH, unit)}
-                      max={roundDisplayLength(cap, unit)}
-                      step={0.1}
-                      onChange={(e) => {
-                        const meters = fromDisplayLength(parseFloat(e.target.value), unit) || MIN_NOTCH
-                        updateRoom(selectedRoom.id, { [dim]: Math.min(cap, Math.max(MIN_NOTCH, meters)) })
-                      }}
+                    <DimensionInput
+                      valueMeters={selectedRoom[dim]}
+                      unit={unit}
+                      min={MIN_NOTCH}
+                      max={cap}
+                      onCommit={(meters) => updateRoom(selectedRoom.id, { [dim]: meters })}
                       style={inputStyle}
                     />
                   </div>
