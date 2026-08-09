@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Shape } from 'three'
 import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
@@ -12,6 +12,12 @@ const WINDOW_SILL = 0.9
 const EPS = 0.001
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
+
+// Safari doesn't reliably synthesize a native "dblclick" on a WebGL canvas (the re-render
+// triggered by the first click's selection state change seems to fall outside its double-click
+// window), and touch double-tap isn't guaranteed to produce one either. Detecting the double
+// click/tap ourselves from two "click" events — which fire reliably everywhere — sidesteps both.
+const DOUBLE_CLICK_MS = 350
 
 function computeOpenings(length, doors, windows) {
   const openings = []
@@ -111,25 +117,33 @@ function buildLShape(width, height, notchWidth, notchHeight, flipY) {
   return shape
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, doors, windows }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, doors, windows }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(
     () => clipSegments(buildSolidSegments(length, openings), trimStart, trimEnd, length),
     [length, openings, trimStart, trimEnd]
   )
   const windowOpenings = openings.filter((o) => o.type === 'window')
+  const lastClickRef = useRef(0)
 
   const handleClick = (e) => {
     e.stopPropagation()
-    onClick(roomId)
-    onSelectWall(wallKind, wallKey)
-  }
 
-  const handleDoubleClick = (e) => {
-    e.stopPropagation()
+    if (pickMode) {
+      onWallColorPick(roomId, wallKind, wallKey)
+      return
+    }
+
     onClick(roomId)
     onSelectWall(wallKind, wallKey)
-    onWallDoubleClick(roomId, wallKind, wallKey, e.nativeEvent)
+
+    const now = performance.now()
+    if (now - lastClickRef.current < DOUBLE_CLICK_MS) {
+      lastClickRef.current = 0
+      onWallDoubleClick(roomId, wallKind, wallKey, e.nativeEvent)
+    } else {
+      lastClickRef.current = now
+    }
   }
 
   return (
@@ -139,7 +153,6 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
           key={i}
           position={[seg.x + seg.w / 2 - length / 2, seg.y + seg.h / 2, 0]}
           onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
         >
           <boxGeometry args={[seg.w, seg.h, thickness]} />
           <meshStandardMaterial color={color} />
@@ -151,7 +164,6 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
           key={`glass-${i}`}
           position={[(win.start + win.end) / 2 - length / 2, (win.bottom + win.top) / 2, 0]}
           onClick={handleClick}
-          onDoubleClick={handleDoubleClick}
         >
           <boxGeometry args={[win.end - win.start, win.top - win.bottom, thickness * 0.4]} />
           <meshStandardMaterial color={glassColor} transparent opacity={0.35} />
@@ -161,7 +173,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick }) {
+export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick }) {
   const darkMode = useHouseStore((s) => s.darkMode)
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
@@ -223,6 +235,8 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             onClick={onClick}
             onSelectWall={onSelectWall}
             onWallDoubleClick={onWallDoubleClick}
+            pickMode={pickMode}
+            onWallColorPick={onWallColorPick}
             doors={doors.filter((d) => d.wall === w.key)}
             windows={windows.filter((win) => win.wall === w.key)}
           />
@@ -251,6 +265,8 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             onClick={onClick}
             onSelectWall={onSelectWall}
             onWallDoubleClick={onWallDoubleClick}
+            pickMode={pickMode}
+            onWallColorPick={onWallColorPick}
             doors={wall.doors ?? []}
             windows={wall.windows ?? []}
           />
