@@ -888,6 +888,7 @@ export default function FloorPlanEditor() {
     e.evt.preventDefault()
     const stage = e.target.getStage()
     const pointer = stage.getPointerPosition()
+    if (!pointer) return
     const oldScale = stageScale
 
     const focus = {

@@ -37,22 +37,38 @@ export default class ErrorBoundary extends Component {
         <div style={{ fontSize: 13, color: '#767676', maxWidth: 420 }}>
           {this.state.error.message ?? String(this.state.error)}
         </div>
-        <button
-          onClick={() => this.setState({ error: null })}
-          style={{
-            marginTop: 8,
-            padding: '8px 16px',
-            borderRadius: 999,
-            border: '1px solid #0058A3',
-            background: '#fff',
-            color: '#0058A3',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 700,
-          }}
-        >
-          Try again
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={() => this.setState({ error: null })}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 999,
+              border: '1px solid #0058A3',
+              background: '#fff',
+              color: '#0058A3',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            Try again
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 999,
+              border: '1px solid #767676',
+              background: '#fff',
+              color: '#767676',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 700,
+            }}
+          >
+            Reload page
+          </button>
+        </div>
       </div>
     )
   }

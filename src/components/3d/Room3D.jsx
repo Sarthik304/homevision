@@ -204,7 +204,10 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
       <mesh
         position={[0, 0, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
-        onClick={(e) => { e.stopPropagation(); onClick(room.id) }}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!pickMode) onClick(room.id)
+        }}
       >
         {isL ? <shapeGeometry args={[floorShape]} /> : <planeGeometry args={[width, height]} />}
         <meshStandardMaterial color={floorColor} />

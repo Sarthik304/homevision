@@ -57,7 +57,7 @@ const WALL_LABELS = {
 // Keeps its own text while focused so a keystroke that dips below `min` (e.g. typing "1" of "12"
 // while feet's min of ~3.28 sits mid-number) isn't immediately clamped and overwritten mid-type.
 // Only clamps to [min, max] on blur, once the user is done typing.
-function DimensionInput({ valueMeters, unit, min, max, onCommit, style }) {
+function DimensionInput({ valueMeters, unit, min, max, onCommit, style, step = 0.1 }) {
   const [text, setText] = useState(() => String(roundDisplayLength(valueMeters, unit)))
   const [focused, setFocused] = useState(false)
 
@@ -71,7 +71,7 @@ function DimensionInput({ valueMeters, unit, min, max, onCommit, style }) {
       value={text}
       min={roundDisplayLength(min, unit)}
       max={max != null ? roundDisplayLength(max, unit) : undefined}
-      step={0.1}
+      step={step}
       onFocus={() => setFocused(true)}
       onChange={(e) => {
         setText(e.target.value)
@@ -202,23 +202,21 @@ function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {label != null && <span style={{ flex: 1, color: color.text }}>{label}</span>}
         <span style={{ color: color.muted, fontSize: 11 }}>W</span>
-        <input
-          type="number"
-          value={roundDisplayLength(item.width, unit)}
-          min={roundDisplayLength(minWidth, unit)}
-          step={0.1}
-          onChange={(e) => onUpdate(item.id, { width: fromDisplayLength(parseFloat(e.target.value), unit) || minWidth })}
+        <DimensionInput
+          valueMeters={item.width}
+          unit={unit}
+          min={minWidth}
+          onCommit={(meters) => onUpdate(item.id, { width: meters })}
           style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text, flex: label == null ? 1 : undefined }}
         />
         {minHeight != null && (
           <>
             <span style={{ color: color.muted, fontSize: 11 }}>H</span>
-            <input
-              type="number"
-              value={roundDisplayLength(item.height, unit)}
-              min={roundDisplayLength(minHeight, unit)}
-              step={0.1}
-              onChange={(e) => onUpdate(item.id, { height: fromDisplayLength(parseFloat(e.target.value), unit) || minHeight })}
+            <DimensionInput
+              valueMeters={item.height}
+              unit={unit}
+              min={minHeight}
+              onCommit={(meters) => onUpdate(item.id, { height: meters })}
               style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
             />
           </>
@@ -372,17 +370,13 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
           }}
         />
         <span style={{ color: color.muted, fontSize: 11 }}>Thickness</span>
-        <input
-          type="number"
-          value={roundDisplayLength(wall.thickness, unit)}
-          min={roundDisplayLength(0.05, unit)}
-          max={roundDisplayLength(0.5, unit)}
+        <DimensionInput
+          valueMeters={wall.thickness}
+          unit={unit}
+          min={0.05}
+          max={0.5}
           step={0.01}
-          onChange={(e) =>
-            actions.updateInteriorWall(room.id, wall.id, {
-              thickness: fromDisplayLength(parseFloat(e.target.value), unit) || 0.05,
-            })
-          }
+          onCommit={(meters) => actions.updateInteriorWall(room.id, wall.id, { thickness: meters })}
           style={{ width: 52, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.surface, color: color.text }}
         />
         <button
@@ -863,7 +857,11 @@ export default function Sidebar() {
           </div>
 
           <button
-            onClick={() => removeRoom(selectedRoom.id)}
+            onClick={() => {
+              if (window.confirm(`Delete "${selectedRoom.name}"? This can't be undone.`)) {
+                removeRoom(selectedRoom.id)
+              }
+            }}
             style={{
               padding: '9px',
               background: 'transparent',

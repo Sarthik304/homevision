@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import Sidebar from './Sidebar'
 import useHouseStore from '../../store/useHouseStore'
@@ -96,13 +96,26 @@ describe('editing a selected room', () => {
     expect(optionValues).not.toContain('top')
   })
 
-  it('deleting the room clears it from the list and the selection', () => {
+  it('deleting the room asks for confirmation, then clears it from the list and the selection', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<Sidebar />)
     fireEvent.click(screen.getByRole('button', { name: 'Delete room' }))
 
+    expect(confirmSpy).toHaveBeenCalled()
     expect(getRoom(LIVING_ROOM_ID)).toBeUndefined()
     expect(useHouseStore.getState().selectedRoomId).toBeNull()
     expect(screen.queryByText('Living Room')).not.toBeInTheDocument()
+    confirmSpy.mockRestore()
+  })
+
+  it('declining the confirmation leaves the room untouched', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    render(<Sidebar />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete room' }))
+
+    expect(getRoom(LIVING_ROOM_ID)).toBeDefined()
+    expect(useHouseStore.getState().selectedRoomId).toBe(LIVING_ROOM_ID)
+    confirmSpy.mockRestore()
   })
 })
 
@@ -156,6 +169,19 @@ describe('doorways', () => {
 
     expect(getRoom(LIVING_ROOM_ID).doors).toHaveLength(1)
     expect(getRoom(BEDROOM_ID).doors).toHaveLength(1)
+  })
+
+  it('typing a negative door width is clamped to the minimum on blur, instead of storing a negative value', () => {
+    render(<Sidebar />)
+    const doorwaysSection = within(screen.getByText('Doorways').parentElement)
+    fireEvent.click(doorwaysSection.getByRole('button', { name: '+ Add' }))
+
+    const widthInput = screen.getByDisplayValue(0.9)
+    fireEvent.change(widthInput, { target: { value: '-5' } })
+    expect(getRoom(LIVING_ROOM_ID).doors[0].width).toBe(-5) // not yet clamped mid-type
+
+    fireEvent.blur(widthInput)
+    expect(getRoom(LIVING_ROOM_ID).doors[0].width).toBe(0.3) // clamped to minWidth
   })
 })
 
