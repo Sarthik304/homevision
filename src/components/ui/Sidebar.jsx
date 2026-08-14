@@ -101,6 +101,7 @@ function WallToggles({ room, toggleWall, color }) {
           return (
             <button
               key={key}
+              className="pixel-btn"
               onClick={() => toggleWall(room.id, key)}
               style={{
                 padding: '7px 0',
@@ -280,6 +281,7 @@ function OpeningList({ title, items, availableWalls, onAdd, onUpdate, onRemove, 
             ))}
           </select>
           <button
+            className="pixel-btn"
             onClick={() => onAdd(wallChoice)}
             style={{
               padding: '0 12px',
@@ -397,10 +399,10 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
       )}
 
       <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => actions.addInteriorDoor(room.id, wall.id)} style={addButtonStyle}>
+        <button className="pixel-btn" onClick={() => actions.addInteriorDoor(room.id, wall.id)} style={addButtonStyle}>
           + Add door
         </button>
-        <button onClick={() => actions.addInteriorWindow(room.id, wall.id)} style={addButtonStyle}>
+        <button className="pixel-btn" onClick={() => actions.addInteriorWindow(room.id, wall.id)} style={addButtonStyle}>
           + Add window
         </button>
       </div>
@@ -630,6 +632,7 @@ export default function Sidebar() {
               return (
                 <button
                   key={key}
+                  className="pixel-btn"
                   onClick={() => setNewRoomShape(key)}
                   style={{
                     padding: '7px 0',
@@ -650,10 +653,10 @@ export default function Sidebar() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-          <button onClick={() => addRoom(newRoomShape)} style={secondaryButton}>
+          <button className="pixel-btn" onClick={() => addRoom(newRoomShape)} style={secondaryButton}>
             + Add room
           </button>
-          <button onClick={addFloor} style={secondaryButton}>
+          <button className="pixel-btn" onClick={addFloor} style={secondaryButton}>
             + Add floor (no walls)
           </button>
         </div>
@@ -847,7 +850,7 @@ export default function Sidebar() {
               />
             ))}
 
-            <button onClick={() => addInteriorWall(selectedRoom.id)} style={secondaryButton}>
+            <button className="pixel-btn" onClick={() => addInteriorWall(selectedRoom.id)} style={secondaryButton}>
               + Add interior wall
             </button>
 
@@ -857,6 +860,7 @@ export default function Sidebar() {
           </div>
 
           <button
+            className="pixel-btn"
             onClick={() => {
               if (window.confirm(`Delete "${selectedRoom.name}"? This can't be undone.`)) {
                 removeRoom(selectedRoom.id)

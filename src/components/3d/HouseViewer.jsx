@@ -218,15 +218,16 @@ export default function HouseViewer() {
 
       {colorPicker && activeRoom && (
         <div
+          className="pixel-shadow"
           style={{
             position: 'absolute',
             left: colorPicker.x,
             top: colorPicker.y,
             width: POPUP_WIDTH,
             background: color.bg,
-            border: `1px solid ${color.border}`,
+            border: `1.5px solid ${color.text}`,
             borderRadius: radius.md,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            '--pixel-shadow-color': color.text,
             padding: 10,
             zIndex: 10,
           }}
@@ -245,6 +246,7 @@ export default function HouseViewer() {
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
+                className="pixel-btn"
                 onClick={() => setPickMode((p) => !p)}
                 aria-label="Pick colour from another wall"
                 title="Pick colour from another wall"

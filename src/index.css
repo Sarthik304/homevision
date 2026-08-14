@@ -38,6 +38,23 @@ input:focus {
   border-radius: 3px;
 }
 
+/* Retro accents borrowed from system.css (github.com/sakofchit/system.css), a classic Mac OS
+   design system — used sparingly as interaction/shape flourishes, not a full theme swap. */
+
+/* system.css buttons fully invert (black<->white) on press instead of a soft state change;
+   filter: invert(1) reproduces that flip on whatever colors a button already has, in either theme */
+.pixel-btn {
+  transition: none;
+}
+.pixel-btn:active {
+  filter: invert(1);
+}
+
+/* system.css's --box-shadow: a hard, unblurred offset instead of a soft drop shadow */
+.pixel-shadow {
+  box-shadow: 3px 3px 0 0 var(--pixel-shadow-color, currentColor) !important;
+}
+
 .react-colorful {
   height: 160px;
   border: 1px solid #dfdfdf;

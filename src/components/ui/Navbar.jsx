@@ -64,6 +64,7 @@ export default function Navbar() {
           return (
             <button
               key={view}
+              className="pixel-btn"
               onClick={() => setActiveView(view)}
               style={{
                 padding: '5px 16px',
@@ -90,6 +91,7 @@ export default function Navbar() {
       </div>
 
       <button
+        className="pixel-btn"
         onClick={toggleUnit}
         title="Toggle measurement unit"
         style={{
@@ -107,6 +109,7 @@ export default function Navbar() {
       </button>
 
       <button
+        className="pixel-btn"
         onClick={toggleDarkMode}
         title="Toggle dark mode"
         style={{

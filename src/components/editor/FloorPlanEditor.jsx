@@ -362,6 +362,7 @@ function lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edgeKey
 function ZoomButton({ children, onClick, title, color }) {
   return (
     <button
+      className="pixel-btn"
       onClick={onClick}
       title={title}
       style={{
@@ -1156,6 +1157,7 @@ export default function FloorPlanEditor() {
       </Stage>
 
       <div
+        className="pixel-shadow"
         style={{
           position: 'absolute',
           top: 12,
@@ -1166,8 +1168,8 @@ export default function FloorPlanEditor() {
           background: color.bg,
           padding: 6,
           borderRadius: radius.md,
-          border: `1px solid ${color.border}`,
-          boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+          border: `1.5px solid ${color.text}`,
+          '--pixel-shadow-color': color.text,
         }}
       >
         <ZoomButton title="Zoom in" onClick={() => zoomAtCenter(stageScale * ZOOM_STEP)} color={color}>
@@ -1193,6 +1195,7 @@ export default function FloorPlanEditor() {
 
       {selectedRoomIds.length > 1 && (
         <div
+          className="pixel-shadow"
           style={{
             position: 'absolute',
             top: 12,
@@ -1203,14 +1206,15 @@ export default function FloorPlanEditor() {
             background: color.bg,
             padding: '8px 12px',
             borderRadius: radius.pill,
-            border: `1px solid ${color.border}`,
-            boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+            border: `1.5px solid ${color.text}`,
+            '--pixel-shadow-color': color.text,
             fontSize: 12,
             color: color.text,
           }}
         >
           {selectedRoomIds.length} rooms selected — drag any one to move them together
           <button
+            className="pixel-btn"
             onClick={() => setSelectedRoomIds([])}
             style={{
               background: 'transparent',
