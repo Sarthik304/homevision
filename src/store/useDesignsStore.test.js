@@ -134,6 +134,47 @@ describe('deleteDesign', () => {
   })
 })
 
+describe('deleteAllDesigns', () => {
+  it('clears the local list and active design on success', async () => {
+    useDesignsStore.setState({
+      designs: [
+        { id: 'd1', name: 'A', updated_at: '' },
+        { id: 'd2', name: 'B', updated_at: '' },
+      ],
+      activeDesignId: 'd1',
+      activeDesignName: 'A',
+    })
+    mockFrom.mockReturnValue(chainable({ error: null }))
+
+    const ok = await useDesignsStore.getState().deleteAllDesigns(USER_ID)
+
+    expect(ok).toBe(true)
+    expect(useDesignsStore.getState().designs).toEqual([])
+    expect(useDesignsStore.getState().activeDesignId).toBeNull()
+    expect(useDesignsStore.getState().activeDesignName).toBeNull()
+    expect(useDesignsStore.getState().deletingAllDesigns).toBe(false)
+  })
+
+  it('scopes the bulk delete to this user, not the whole table', async () => {
+    mockFrom.mockReturnValue(chainable({ error: null }))
+
+    await useDesignsStore.getState().deleteAllDesigns(USER_ID)
+
+    expect(mockFrom).toHaveBeenCalledWith('designs')
+  })
+
+  it('leaves the list untouched and records the error on failure', async () => {
+    useDesignsStore.setState({ designs: [{ id: 'd1', name: 'A', updated_at: '' }] })
+    mockFrom.mockReturnValue(chainable({ error: { message: 'delete failed' } }))
+
+    const ok = await useDesignsStore.getState().deleteAllDesigns(USER_ID)
+
+    expect(ok).toBe(false)
+    expect(useDesignsStore.getState().designs).toHaveLength(1)
+    expect(useDesignsStore.getState().designsError).toBe('delete failed')
+  })
+})
+
 describe('reset', () => {
   it('clears designs and the active design, e.g. on sign-out', () => {
     useDesignsStore.setState({

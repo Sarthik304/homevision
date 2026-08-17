@@ -9,6 +9,7 @@ const selectDesignsState = (s) => ({
   designs: s.designs,
   loadingDesigns: s.loadingDesigns,
   savingDesign: s.savingDesign,
+  deletingAllDesigns: s.deletingAllDesigns,
   designsError: s.designsError,
   activeDesignId: s.activeDesignId,
   activeDesignName: s.activeDesignName,
@@ -16,6 +17,7 @@ const selectDesignsState = (s) => ({
   saveDesign: s.saveDesign,
   loadDesign: s.loadDesign,
   deleteDesign: s.deleteDesign,
+  deleteAllDesigns: s.deleteAllDesigns,
   startNewDesign: s.startNewDesign,
 })
 
@@ -25,6 +27,7 @@ export default function DesignsPanel({ onClose, color }) {
     designs,
     loadingDesigns,
     savingDesign,
+    deletingAllDesigns,
     designsError,
     activeDesignId,
     activeDesignName,
@@ -32,6 +35,7 @@ export default function DesignsPanel({ onClose, color }) {
     saveDesign,
     loadDesign,
     deleteDesign,
+    deleteAllDesigns,
     startNewDesign,
   } = useDesignsStore(useShallow(selectDesignsState))
   const [nameDraft, setNameDraft] = useState(activeDesignName ?? 'Untitled design')
@@ -110,8 +114,36 @@ export default function DesignsPanel({ onClose, color }) {
         <div style={{ fontSize: 12, color: color.danger, marginBottom: 10 }}>{designsError}</div>
       )}
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: color.muted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
-        Saved designs
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: color.muted, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+          Saved designs
+        </span>
+        {designs.length > 0 && (
+          <button
+            className="pixel-btn"
+            onClick={() => {
+              const count = designs.length
+              const noun = count === 1 ? 'design' : 'designs'
+              if (window.confirm(`Delete all ${count} saved ${noun}? This frees up your storage but can't be undone.`)) {
+                deleteAllDesigns(user.id)
+              }
+            }}
+            disabled={deletingAllDesigns}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: color.danger,
+              cursor: deletingAllDesigns ? 'default' : 'pointer',
+              opacity: deletingAllDesigns ? 0.6 : 1,
+              fontSize: 11,
+              fontWeight: 600,
+              padding: 0,
+              textDecoration: 'underline',
+            }}
+          >
+            {deletingAllDesigns ? 'Deleting…' : 'Delete all'}
+          </button>
+        )}
       </div>
 
       {loadingDesigns ? (

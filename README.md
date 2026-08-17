@@ -15,7 +15,7 @@ An interactive home configurator. Design your floor plan in 2D, then walk throug
 - **Wall & floor color picker** — click a wall or floor to select it, double-click (or double-tap) a wall in 3D to change just that wall's color, with an eyedropper to sample a color from another wall
 - **Meters or feet** — toggle the display unit from the navbar; room geometry is still stored in meters underneath
 - **Room management** — add rooms or open floor areas, rename, resize, and delete them from the sidebar (with a confirmation before deleting)
-- **Accounts & saved designs** — sign up/sign in, save the current design to your account, and load or delete any of your saved designs from "My designs" (needs a Supabase project — see [Set up accounts & saved designs](#set-up-accounts--saved-designs-optional) below; the app runs fine without one, it just shows a setup hint instead)
+- **Accounts & saved designs** — sign up/sign in, save the current design to your account, and load, delete, or bulk-delete-all of your saved designs from "My designs" to free up space (needs a Supabase project — see [Set up accounts & saved designs](#set-up-accounts--saved-designs-optional) below; the app runs fine without one, it just shows a setup hint instead)
 - **3D house viewer** — the same house rendered in Three.js, walls cut out around doors/windows, auto-centered on the grid regardless of where rooms sit in 2D space
 - **Dark mode** — toggle from the navbar, applied across both views
 - **Switch views** — jump between the 2D plan and 3D view with one click

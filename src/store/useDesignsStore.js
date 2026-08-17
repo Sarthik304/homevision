@@ -8,6 +8,7 @@ const useDesignsStore = create((set, get) => ({
   designs: [], // [{ id, name, updated_at }] for the signed-in user, newest first
   loadingDesigns: false,
   savingDesign: false,
+  deletingAllDesigns: false,
   designsError: null,
   activeDesignId: null,
   activeDesignName: null,
@@ -80,6 +81,20 @@ const useDesignsStore = create((set, get) => ({
       get().fetchDesigns(userId)
     }
     set({ designsError: error?.message ?? null })
+  },
+
+  // wipes every saved design for this user — RLS scopes the delete to their own rows, so this
+  // can never touch another user's data even though it has no per-row id filter
+  deleteAllDesigns: async (userId) => {
+    if (!supabase || !userId) return false
+    set({ deletingAllDesigns: true, designsError: null })
+    const { error } = await supabase.from('designs').delete().eq('user_id', userId)
+    set({
+      deletingAllDesigns: false,
+      designsError: error?.message ?? null,
+      ...(error ? {} : { designs: [], activeDesignId: null, activeDesignName: null }),
+    })
+    return !error
   },
 
   startNewDesign: () => set({ activeDesignId: null, activeDesignName: null }),
