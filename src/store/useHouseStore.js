@@ -228,6 +228,17 @@ const useHouseStore = create((set) => ({
 
   setActiveView: (view) => set({ activeView: view }),
 
+  // replaces the whole house with a loaded design (see useDesignsStore) — resets selection since
+  // the loaded rooms' ids won't match whatever was selected in the previous design
+  loadRooms: (rooms) =>
+    set({
+      rooms,
+      selectedRoomId: null,
+      selectedRoomIds: [],
+      selectedInteriorWallId: null,
+      selectedBoundaryWallKey: null,
+    }),
+
   updateRoomColor: (id, type, color) =>
     set((state) => ({
       rooms: state.rooms.map((room) =>

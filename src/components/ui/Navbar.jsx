@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useHouseStore from '../../store/useHouseStore'
+import useAuthStore from '../../store/useAuthStore'
+import AuthModal from '../auth/AuthModal'
+import DesignsPanel from '../auth/DesignsPanel'
 import { getColors, radius } from '../../theme'
 
 export default function Navbar() {
@@ -14,7 +18,11 @@ export default function Navbar() {
       toggleUnit: s.toggleUnit,
     }))
   )
+  const { user, initializing, signOut } = useAuthStore(
+    useShallow((s) => ({ user: s.user, initializing: s.initializing, signOut: s.signOut }))
+  )
   const color = getColors(darkMode)
+  const [modal, setModal] = useState(null) // null | 'auth' | 'designs'
 
   return (
     <div
@@ -125,6 +133,71 @@ export default function Navbar() {
       >
         {darkMode ? 'Light mode' : 'Dark mode'}
       </button>
+
+      {!initializing && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {user ? (
+            <>
+              <span style={{ fontSize: 12, color: color.muted, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user.email}
+              </span>
+              <button
+                className="pixel-btn"
+                onClick={() => setModal('designs')}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: radius.sm,
+                  border: `1px solid ${color.brand}`,
+                  background: color.brandTint,
+                  color: color.brand,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                My designs
+              </button>
+              <button
+                className="pixel-btn"
+                onClick={signOut}
+                title="Sign out"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: radius.sm,
+                  border: `1px solid ${color.border}`,
+                  background: color.surface,
+                  color: color.text,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              className="pixel-btn"
+              onClick={() => setModal('auth')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: radius.sm,
+                border: `1px solid ${color.brand}`,
+                background: color.brand,
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              Sign in
+            </button>
+          )}
+        </div>
+      )}
+
+      {modal === 'auth' && <AuthModal onClose={() => setModal(null)} color={color} />}
+      {modal === 'designs' && user && <DesignsPanel onClose={() => setModal(null)} color={color} />}
     </div>
   )
 }

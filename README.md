@@ -15,6 +15,7 @@ An interactive home configurator. Design your floor plan in 2D, then walk throug
 - **Wall & floor color picker** — click a wall or floor to select it, double-click (or double-tap) a wall in 3D to change just that wall's color, with an eyedropper to sample a color from another wall
 - **Meters or feet** — toggle the display unit from the navbar; room geometry is still stored in meters underneath
 - **Room management** — add rooms or open floor areas, rename, resize, and delete them from the sidebar (with a confirmation before deleting)
+- **Accounts & saved designs** — sign up/sign in, save the current design to your account, and load or delete any of your saved designs from "My designs" (needs a Supabase project — see [Set up accounts & saved designs](#set-up-accounts--saved-designs-optional) below; the app runs fine without one, it just shows a setup hint instead)
 - **3D house viewer** — the same house rendered in Three.js, walls cut out around doors/windows, auto-centered on the grid regardless of where rooms sit in 2D space
 - **Dark mode** — toggle from the navbar, applied across both views
 - **Switch views** — jump between the 2D plan and 3D view with one click
@@ -30,6 +31,7 @@ An interactive home configurator. Design your floor plan in 2D, then walk throug
 | 2D editor | Konva.js via react-konva |
 | Color picker | react-colorful |
 | State management | Zustand |
+| Accounts & saved designs | Supabase (Postgres + Auth) |
 | Testing | Vitest + React Testing Library |
 | Linting | oxlint |
 
@@ -50,6 +52,23 @@ Visit `http://localhost:5173`
 
 Other scripts: `npm run build` (production build), `npm run preview` (preview the build), `npm run lint` (oxlint), `npm test` (run the Vitest suite).
 
+## Set up accounts & saved designs (optional)
+
+Everything else in the app works with zero setup. Accounts and saved designs are backed by
+[Supabase](https://supabase.com) and only need configuring if you want that feature:
+
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open the SQL editor in your project and run [`supabase/schema.sql`](supabase/schema.sql) — it creates the `designs` table and its row-level security policies (each user can only see/edit their own).
+3. In **Project Settings → API**, copy the **Project URL** and **anon public** key.
+4. Copy `.env.example` to `.env.local` and fill in those two values:
+   ```bash
+   cp .env.example .env.local
+   ```
+5. Restart the dev server (`npm run dev`) so Vite picks up the new env vars.
+
+Without this, "Sign in" and "My designs" still appear in the navbar, but open a panel explaining
+how to connect Supabase instead of a working form — the rest of the app is unaffected.
+
 ## Project structure
 
 ```
@@ -61,11 +80,19 @@ src/
 │   ├── editor/
 │   │   └── FloorPlanEditor.jsx  # 2D top-down floor plan view (drag, resize, rotate, snapping, multi-select, pan/zoom)
 │   ├── ui/
-│   │   ├── Navbar.jsx           # Top bar: 2D/3D toggle, unit toggle, dark mode switch
-│   │   └── Sidebar.jsx          # Room list, color/size/rotation controls, doors/windows/interior walls
+│   │   ├── Navbar.jsx           # Top bar: 2D/3D toggle, unit toggle, dark mode switch, account controls
+│   │   ├── Sidebar.jsx          # Room list, color/size/rotation controls, doors/windows/interior walls
+│   │   └── Modal.jsx            # Shared centered-dialog wrapper (used by the auth/designs panels)
+│   ├── auth/
+│   │   ├── AuthModal.jsx        # Sign in / create account form (or a Supabase setup hint if unconfigured)
+│   │   └── DesignsPanel.jsx     # Save the current design; list/load/delete your saved designs
 │   └── ErrorBoundary.jsx        # Catches render crashes, offers retry/reload instead of a blank page
 ├── store/
-│   └── useHouseStore.js         # Central data store (all rooms, walls, doors, windows live here)
+│   ├── useHouseStore.js         # Central data store (all rooms, walls, doors, windows live here)
+│   ├── useAuthStore.js          # Signed-in user + sign up/in/out, backed by Supabase Auth
+│   └── useDesignsStore.js       # Saved-design list + save/load/delete against Supabase
+├── lib/
+│   └── supabaseClient.js        # Supabase client (null if VITE_SUPABASE_* env vars aren't set)
 ├── constants/
 │   ├── floorPlan.js             # Shared 2D scale/padding constants (editor <-> store)
 │   └── lshape.js                # L-shaped room edge/wall-key geometry
@@ -78,6 +105,9 @@ src/
 ├── theme.js                      # Color palette + tokens (light/dark)
 ├── App.jsx                      # Root component — layout shell
 └── main.jsx                     # Entry point
+
+supabase/
+└── schema.sql                   # `designs` table + row-level security policies — run in Supabase's SQL editor
 ```
 
 Most files under `utils/`, `constants/`, and `store/` have a matching `*.test.js` alongside them.
@@ -85,6 +115,5 @@ Most files under `utils/`, `constants/`, and `store/` have a matching `*.test.js
 ## Coming next (Phase 2)
 
 - Upload floor plan image → AI reads dimensions
-- User accounts and saved designs
 - Real 3D furniture models
 - Shareable design links

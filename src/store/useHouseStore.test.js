@@ -265,6 +265,39 @@ describe('removeRoom', () => {
   })
 })
 
+describe('loadRooms', () => {
+  it('replaces the whole house and clears selection state tied to the previous rooms', () => {
+    useHouseStore.getState().selectRoom(LIVING_ROOM_ID)
+    useHouseStore.getState().selectBoundaryWall('top')
+
+    const newRooms = [
+      {
+        id: 99,
+        name: 'Loaded Room',
+        x: 0,
+        y: 0,
+        width: 5,
+        height: 5,
+        wallColor: '#ffffff',
+        floorColor: '#ffffff',
+        walls: { top: true, bottom: true, left: true, right: true },
+        wallColors: {},
+        doors: [],
+        windows: [],
+        interiorWalls: [],
+      },
+    ]
+    useHouseStore.getState().loadRooms(newRooms)
+
+    const state = useHouseStore.getState()
+    expect(state.rooms).toBe(newRooms)
+    expect(state.selectedRoomId).toBeNull()
+    expect(state.selectedRoomIds).toEqual([])
+    expect(state.selectedBoundaryWallKey).toBeNull()
+    expect(state.selectedInteriorWallId).toBeNull()
+  })
+})
+
 describe('moveRoomsTo', () => {
   it('moves every room in the batch to its given position in one call', () => {
     useHouseStore.getState().moveRoomsTo([

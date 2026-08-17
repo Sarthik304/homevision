@@ -3,6 +3,7 @@ import Navbar from './components/ui/Navbar'
 import Sidebar from './components/ui/Sidebar'
 import FloorPlanEditor from './components/editor/FloorPlanEditor'
 import useHouseStore from './store/useHouseStore'
+import useAuthStore from './store/useAuthStore'
 import { getColors } from './theme'
 
 // three.js + @react-three/fiber + drei (~5MB) are only needed for the 3D view — lazy() defers
@@ -13,6 +14,11 @@ export default function App() {
   const activeView = useHouseStore((s) => s.activeView)
   const darkMode = useHouseStore((s) => s.darkMode)
   const color = getColors(darkMode)
+
+  // once per app load: pick up any existing Supabase session and subscribe to future auth changes
+  useEffect(() => {
+    useAuthStore.getState().init()
+  }, [])
 
   useEffect(() => {
     document.body.style.background = color.workspace
