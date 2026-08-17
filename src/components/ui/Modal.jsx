@@ -1,6 +1,20 @@
+import { useEffect } from 'react'
 import { radius } from '../../theme'
 
 export default function Modal({ title, onClose, children, color, width = 360 }) {
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return
+      // capture phase + stopPropagation: other window-level Escape handlers (e.g.
+      // FloorPlanEditor's deselect-all) live on the bubble phase, so without this a modal's
+      // Escape-to-close would also fire them as an unrelated side effect
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [onClose])
+
   return (
     <div
       onClick={onClose}

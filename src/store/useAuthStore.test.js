@@ -36,6 +36,18 @@ describe('init', () => {
     expect(useAuthStore.getState().initializing).toBe(false)
   })
 
+  it('returns an unsubscribe that tears down the auth-change listener (StrictMode double-invoke safety)', async () => {
+    const unsubscribe = vi.fn()
+    mockAuth.getSession.mockResolvedValue({ data: { session: null } })
+    mockAuth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe } } })
+
+    const cleanup = useAuthStore.getState().init()
+    await Promise.resolve()
+    cleanup()
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
   it('resets the designs store when an auth change signs the user out', () => {
     mockAuth.getSession.mockResolvedValue({ data: { session: null } })
     let changeHandler

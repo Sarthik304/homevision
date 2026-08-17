@@ -15,9 +15,10 @@ export default function App() {
   const darkMode = useHouseStore((s) => s.darkMode)
   const color = getColors(darkMode)
 
-  // once per app load: pick up any existing Supabase session and subscribe to future auth changes
+  // once per app load: pick up any existing Supabase session and subscribe to future auth changes.
+  // The returned unsubscribe is StrictMode-safe (see useAuthStore.init).
   useEffect(() => {
-    useAuthStore.getState().init()
+    return useAuthStore.getState().init()
   }, [])
 
   useEffect(() => {

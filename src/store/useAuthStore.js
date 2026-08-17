@@ -13,20 +13,25 @@ const useAuthStore = create((set) => ({
   authError: null,
 
   // called once at app startup (see App.jsx) — reads any existing session and subscribes to
-  // future sign-in/sign-out events (including ones from other tabs)
+  // future sign-in/sign-out events (including ones from other tabs). Returns an unsubscribe
+  // function: App.jsx's effect returns it as its own cleanup so StrictMode's mount -> cleanup ->
+  // mount double-invoke in dev leaves exactly one listener registered, not two.
   init: () => {
     if (!supabase) {
       set({ initializing: false })
-      return
+      return () => {}
     }
     supabase.auth.getSession().then(({ data }) => {
       set({ user: data.session?.user ?? null, initializing: false })
     })
-    supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user ?? null
       set({ user })
       if (!user) useDesignsStore.getState().reset()
     })
+    return () => subscription.unsubscribe()
   },
 
   signUp: async (email, password) => {
