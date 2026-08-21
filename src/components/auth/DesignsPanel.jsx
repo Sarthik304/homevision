@@ -5,6 +5,12 @@ import useDesignsStore from '../../store/useDesignsStore'
 import Modal from '../ui/Modal'
 import { radius } from '../../theme'
 
+// the shareable link for a design — anyone who opens it can view+fork it, see
+// useDesignsStore.loadPublicDesign and the public-read RLS policy in supabase/schema.sql
+function shareLinkFor(designId) {
+  return `${window.location.origin}${window.location.pathname}?design=${designId}`
+}
+
 const selectDesignsState = (s) => ({
   designs: s.designs,
   loadingDesigns: s.loadingDesigns,
@@ -13,11 +19,13 @@ const selectDesignsState = (s) => ({
   designsError: s.designsError,
   activeDesignId: s.activeDesignId,
   activeDesignName: s.activeDesignName,
+  sharedDesign: s.sharedDesign,
   fetchDesigns: s.fetchDesigns,
   saveDesign: s.saveDesign,
   loadDesign: s.loadDesign,
   deleteDesign: s.deleteDesign,
   deleteAllDesigns: s.deleteAllDesigns,
+  setDesignPublic: s.setDesignPublic,
   startNewDesign: s.startNewDesign,
 })
 
@@ -31,22 +39,38 @@ export default function DesignsPanel({ onClose, color }) {
     designsError,
     activeDesignId,
     activeDesignName,
+    sharedDesign,
     fetchDesigns,
     saveDesign,
     loadDesign,
     deleteDesign,
     deleteAllDesigns,
+    setDesignPublic,
     startNewDesign,
   } = useDesignsStore(useShallow(selectDesignsState))
-  const [nameDraft, setNameDraft] = useState(activeDesignName ?? 'Untitled design')
+  const [nameDraft, setNameDraft] = useState(activeDesignName ?? sharedDesign?.name ?? 'Untitled design')
+  const [copiedId, setCopiedId] = useState(null)
+
+  const copyShareLink = async (designId) => {
+    const link = shareLinkFor(designId)
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopiedId(designId)
+      setTimeout(() => setCopiedId((id) => (id === designId ? null : id)), 2000)
+    } catch {
+      // clipboard permission denied/unavailable — fall back to a manual-copy prompt
+      // instead of silently claiming success
+      window.prompt('Copy this link:', link)
+    }
+  }
 
   useEffect(() => {
     fetchDesigns(user.id)
   }, [user.id, fetchDesigns])
 
   useEffect(() => {
-    setNameDraft(activeDesignName ?? 'Untitled design')
-  }, [activeDesignName])
+    setNameDraft(activeDesignName ?? sharedDesign?.name ?? 'Untitled design')
+  }, [activeDesignName, sharedDesign])
 
   const smallButton = {
     padding: '5px 10px',
@@ -157,40 +181,73 @@ export default function DesignsPanel({ onClose, color }) {
               key={d.id}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 8,
+                flexDirection: 'column',
+                gap: 6,
                 padding: '8px 10px',
                 borderRadius: radius.sm,
                 border: `1px solid ${color.border}`,
                 background: d.id === activeDesignId ? color.brandTint : 'transparent',
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {d.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {d.name}
+                  </div>
+                  <div style={{ fontSize: 10, color: color.muted }}>
+                    {new Date(d.updated_at).toLocaleString()}
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: color.muted }}>
-                  {new Date(d.updated_at).toLocaleString()}
-                </div>
+                <button
+                  className="pixel-btn"
+                  onClick={() => loadDesign(d.id).then((ok) => ok && onClose())}
+                  style={smallButton}
+                >
+                  Load
+                </button>
+                <button
+                  className="pixel-btn"
+                  onClick={() => {
+                    if (window.confirm(`Delete "${d.name}"? This can't be undone.`)) {
+                      deleteDesign(user.id, d.id)
+                    }
+                  }}
+                  style={{ ...smallButton, color: color.danger, borderColor: color.danger }}
+                >
+                  Delete
+                </button>
               </div>
-              <button
-                className="pixel-btn"
-                onClick={() => loadDesign(d.id).then((ok) => ok && onClose())}
-                style={smallButton}
-              >
-                Load
-              </button>
-              <button
-                className="pixel-btn"
-                onClick={() => {
-                  if (window.confirm(`Delete "${d.name}"? This can't be undone.`)) {
-                    deleteDesign(user.id, d.id)
-                  }
-                }}
-                style={{ ...smallButton, color: color.danger, borderColor: color.danger }}
-              >
-                Delete
-              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, color: d.is_public ? color.brand : color.muted, flex: 1 }}>
+                  {d.is_public ? '🔗 Shared — anyone with the link can view it' : 'Not shared'}
+                </span>
+                {d.is_public && (
+                  <>
+                    <button
+                      className="pixel-btn"
+                      onClick={() => window.open(shareLinkFor(d.id), '_blank', 'noopener')}
+                      style={{ ...smallButton, color: color.brand, borderColor: color.brand }}
+                    >
+                      Open
+                    </button>
+                    <button
+                      className="pixel-btn"
+                      onClick={() => copyShareLink(d.id)}
+                      style={{ ...smallButton, color: color.brand, borderColor: color.brand }}
+                    >
+                      {copiedId === d.id ? 'Copied!' : 'Copy link'}
+                    </button>
+                  </>
+                )}
+                <button
+                  className="pixel-btn"
+                  onClick={() => setDesignPublic(user.id, d.id, !d.is_public)}
+                  style={smallButton}
+                >
+                  {d.is_public ? 'Unshare' : 'Share'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -5,20 +5,26 @@ import useHouseStore from './useHouseStore'
 // Saved-designs CRUD against Supabase, plus which design (if any) is currently loaded/being
 // edited. Reads/writes useHouseStore's `rooms` directly rather than duplicating it here.
 const useDesignsStore = create((set, get) => ({
-  designs: [], // [{ id, name, updated_at }] for the signed-in user, newest first
+  designs: [], // [{ id, name, updated_at, is_public }] for the signed-in user, newest first
   loadingDesigns: false,
   savingDesign: false,
   deletingAllDesigns: false,
   designsError: null,
   activeDesignId: null,
   activeDesignName: null,
+  // someone else's design, opened via its shareable link (see loadPublicDesign) — distinct from
+  // activeDesignId, which only ever refers to a design *this* user owns and can save over
+  sharedDesign: null, // { id, name } | null
+  // kept separate from designsError so a broken/expired share link can show its own message
+  // (SharedDesignBanner) without being confused with unrelated My-designs errors (DesignsPanel)
+  sharedDesignError: null,
 
   fetchDesigns: async (userId) => {
     if (!supabase || !userId) return
     set({ loadingDesigns: true, designsError: null })
     const { data, error } = await supabase
       .from('designs')
-      .select('id, name, updated_at')
+      .select('id, name, updated_at, is_public')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
     set({
@@ -49,7 +55,9 @@ const useDesignsStore = create((set, get) => ({
           .single()
 
     if (!error) {
-      set({ activeDesignId: data.id, activeDesignName: data.name })
+      // a save always produces/updates a design *this* user owns, so any "viewing a shared
+      // design" banner no longer applies once it succeeds
+      set({ activeDesignId: data.id, activeDesignName: data.name, sharedDesign: null })
       get().fetchDesigns(userId)
     }
     set({ savingDesign: false, designsError: error?.message ?? null })
@@ -69,9 +77,44 @@ const useDesignsStore = create((set, get) => ({
       return false
     }
     useHouseStore.getState().loadRooms(data.rooms)
-    set({ activeDesignId: data.id, activeDesignName: data.name })
+    set({ activeDesignId: data.id, activeDesignName: data.name, sharedDesign: null })
     return true
   },
+
+  // flips a design's shareable-link visibility. Only the owner can succeed (enforced by the
+  // "Users can update their own designs" RLS policy — see supabase/schema.sql), so no ownership
+  // check is needed client-side, matching deleteDesign's existing pattern.
+  setDesignPublic: async (userId, designId, isPublic) => {
+    if (!supabase || !userId) return false
+    set({ designsError: null })
+    const { error } = await supabase.from('designs').update({ is_public: isPublic }).eq('id', designId)
+    if (!error) get().fetchDesigns(userId)
+    else set({ designsError: error.message })
+    return !error
+  },
+
+  // loads a design shared via its link (see the "Share" toggle in DesignsPanel) — works for
+  // signed-out visitors too, since RLS's public-read policy doesn't require auth. Deliberately
+  // leaves activeDesignId untouched (null unless already editing one's own design) so a
+  // subsequent saveDesign creates the viewer's own copy instead of overwriting the original.
+  loadPublicDesign: async (designId) => {
+    if (!supabase) return false
+    set({ sharedDesignError: null })
+    const { data, error } = await supabase
+      .from('designs')
+      .select('id, name, rooms')
+      .eq('id', designId)
+      .single()
+    if (error) {
+      set({ sharedDesignError: "This design isn't available — it may have been unshared or deleted." })
+      return false
+    }
+    useHouseStore.getState().loadRooms(data.rooms)
+    set({ activeDesignId: null, activeDesignName: null, sharedDesign: { id: data.id, name: data.name } })
+    return true
+  },
+
+  clearSharedDesign: () => set({ sharedDesign: null, sharedDesignError: null }),
 
   deleteDesign: async (userId, designId) => {
     if (!supabase) return
@@ -97,10 +140,19 @@ const useDesignsStore = create((set, get) => ({
     return !error
   },
 
-  startNewDesign: () => set({ activeDesignId: null, activeDesignName: null }),
+  startNewDesign: () =>
+    set({ activeDesignId: null, activeDesignName: null, sharedDesign: null, sharedDesignError: null }),
 
   // cleared on sign-out so the next signed-in user doesn't briefly see the previous one's list
-  reset: () => set({ designs: [], activeDesignId: null, activeDesignName: null, designsError: null }),
+  reset: () =>
+    set({
+      designs: [],
+      activeDesignId: null,
+      activeDesignName: null,
+      designsError: null,
+      sharedDesign: null,
+      sharedDesignError: null,
+    }),
 }))
 
 export default useDesignsStore

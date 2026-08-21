@@ -35,6 +35,8 @@ beforeEach(() => {
     designsError: null,
     activeDesignId: null,
     activeDesignName: null,
+    sharedDesign: null,
+    sharedDesignError: null,
   })
   useHouseStore.setState({ rooms: [{ id: 1, name: 'Living Room' }] })
 })
@@ -110,6 +112,74 @@ describe('loadDesign', () => {
   })
 })
 
+describe('setDesignPublic', () => {
+  it('flips the flag and refreshes the list on success', async () => {
+    mockFrom
+      .mockReturnValueOnce(chainable({ error: null })) // update
+      .mockReturnValueOnce(chainable({ data: [{ id: 'd1', name: 'A', updated_at: '', is_public: true }], error: null })) // refresh
+
+    const ok = await useDesignsStore.getState().setDesignPublic(USER_ID, 'd1', true)
+
+    expect(ok).toBe(true)
+    // the refresh (fetchDesigns) is fired-and-forgotten, not awaited — same as saveDesign/deleteDesign
+    await vi.waitFor(() => {
+      expect(useDesignsStore.getState().designs[0]?.is_public).toBe(true)
+    })
+  })
+
+  it('records the error on failure without touching the list', async () => {
+    useDesignsStore.setState({ designs: [{ id: 'd1', name: 'A', updated_at: '', is_public: false }] })
+    mockFrom.mockReturnValue(chainable({ error: { message: 'nope' } }))
+
+    const ok = await useDesignsStore.getState().setDesignPublic(USER_ID, 'd1', true)
+
+    expect(ok).toBe(false)
+    expect(useDesignsStore.getState().designsError).toBe('nope')
+    expect(useDesignsStore.getState().designs[0].is_public).toBe(false)
+  })
+})
+
+describe('loadPublicDesign', () => {
+  it('loads the shared rooms, marks sharedDesign, and does not claim ownership', async () => {
+    const rooms = [{ id: 7, name: "Someone else's room" }]
+    mockFrom.mockReturnValue(chainable({ data: { id: 'shared-1', name: "Jane's Apartment", rooms }, error: null }))
+
+    const ok = await useDesignsStore.getState().loadPublicDesign('shared-1')
+
+    expect(ok).toBe(true)
+    expect(useHouseStore.getState().rooms).toBe(rooms)
+    expect(useDesignsStore.getState().sharedDesign).toEqual({ id: 'shared-1', name: "Jane's Apartment" })
+    // must stay null — otherwise a later saveDesign would try to overwrite someone else's row
+    expect(useDesignsStore.getState().activeDesignId).toBeNull()
+  })
+
+  it('surfaces a friendly error and leaves the house untouched when the design is missing/private', async () => {
+    const before = useHouseStore.getState().rooms
+    mockFrom.mockReturnValue(chainable({ data: null, error: { message: 'no rows' } }))
+
+    const ok = await useDesignsStore.getState().loadPublicDesign('missing')
+
+    expect(ok).toBe(false)
+    expect(useDesignsStore.getState().sharedDesignError).toMatch(/isn't available/)
+    expect(useDesignsStore.getState().designsError).toBeNull() // distinct field — see SharedDesignBanner
+    expect(useHouseStore.getState().rooms).toBe(before)
+  })
+})
+
+describe('saveDesign clearing sharedDesign', () => {
+  it('clears sharedDesign once a viewed shared design is saved as the user\'s own copy', async () => {
+    useDesignsStore.setState({ sharedDesign: { id: 'shared-1', name: 'Original' } })
+    mockFrom
+      .mockReturnValueOnce(chainable({ data: { id: 'new-id', name: 'Original' }, error: null })) // insert
+      .mockReturnValueOnce(chainable({ data: [], error: null })) // refresh
+
+    await useDesignsStore.getState().saveDesign(USER_ID, 'Original')
+
+    expect(useDesignsStore.getState().sharedDesign).toBeNull()
+    expect(useDesignsStore.getState().activeDesignId).toBe('new-id')
+  })
+})
+
 describe('deleteDesign', () => {
   it('clears activeDesignId when the deleted design was the active one', async () => {
     useDesignsStore.setState({ activeDesignId: 'd1', activeDesignName: 'Active' })
@@ -176,12 +246,14 @@ describe('deleteAllDesigns', () => {
 })
 
 describe('reset', () => {
-  it('clears designs and the active design, e.g. on sign-out', () => {
+  it('clears designs, the active design, and any shared-design view, e.g. on sign-out', () => {
     useDesignsStore.setState({
       designs: [{ id: 'd1', name: 'x', updated_at: '' }],
       activeDesignId: 'd1',
       activeDesignName: 'x',
       designsError: 'stale error',
+      sharedDesign: { id: 'shared-1', name: 'Someone else\'s' },
+      sharedDesignError: 'stale shared-link error',
     })
 
     useDesignsStore.getState().reset()
@@ -191,6 +263,28 @@ describe('reset', () => {
       activeDesignId: null,
       activeDesignName: null,
       designsError: null,
+      sharedDesign: null,
+      sharedDesignError: null,
+    })
+  })
+})
+
+describe('startNewDesign', () => {
+  it('clears the active design and any shared-design view', () => {
+    useDesignsStore.setState({
+      activeDesignId: 'd1',
+      activeDesignName: 'x',
+      sharedDesign: { id: 'shared-1', name: 'Someone else\'s' },
+      sharedDesignError: 'stale shared-link error',
+    })
+
+    useDesignsStore.getState().startNewDesign()
+
+    expect(useDesignsStore.getState()).toMatchObject({
+      activeDesignId: null,
+      activeDesignName: null,
+      sharedDesign: null,
+      sharedDesignError: null,
     })
   })
 })
