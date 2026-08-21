@@ -14,6 +14,10 @@ body {
 
 button {
   font-family: inherit;
+  /* pointed, not rounded — overrides every button's own inline border-radius (pill/sm/md alike).
+     Scoped to buttons only, not inputs/panels/modals — a placeholder look until a real design
+     comes in, so keep this to one rule that's easy to swap out rather than editing every button. */
+  border-radius: 0 !important;
 }
 
 input {
