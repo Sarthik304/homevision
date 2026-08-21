@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import useAuthStore from '../../store/useAuthStore'
 import useDesignsStore from '../../store/useDesignsStore'
 import Modal from '../ui/Modal'
+import DeleteAccountSection from './DeleteAccountSection'
 import { radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
 
@@ -247,6 +248,8 @@ export default function DesignsPanel({ onClose, color }) {
           ))}
         </div>
       )}
+
+      <DeleteAccountSection savedDesignCount={designs.length} onDeleted={onClose} color={color} />
     </Modal>
   )
 }

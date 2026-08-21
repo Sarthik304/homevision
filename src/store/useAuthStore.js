@@ -56,6 +56,24 @@ const useAuthStore = create((set) => ({
     await supabase.auth.signOut()
   },
 
+  // permanently deletes the signed-in user's account (and, via a cascading foreign key, all
+  // their saved designs) — see the delete_own_account() function in supabase/schema.sql, which
+  // is what actually makes this possible: the client's own privileges can't touch auth.users.
+  deleteAccount: async () => {
+    if (!supabase) return { ok: false }
+    set({ authLoading: true, authError: null })
+    const { error } = await supabase.rpc('delete_own_account')
+    if (error) {
+      set({ authLoading: false, authError: error.message })
+      return { ok: false }
+    }
+    // the account is gone, but the client still holds a session token for it — sign out to
+    // clear it locally; this also fires onAuthStateChange, which resets user + useDesignsStore
+    await supabase.auth.signOut()
+    set({ authLoading: false })
+    return { ok: true }
+  },
+
   clearAuthError: () => set({ authError: null }),
 }))
 

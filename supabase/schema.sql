@@ -63,3 +63,25 @@ create trigger designs_set_updated_at
   before update on public.designs
   for each row
   execute function public.set_updated_at();
+
+-- account deletion: the anon/authenticated client role has no privileges on auth.users (nor
+-- should it — that would let anyone delete anyone), so a signed-in user can't remove their own
+-- account with a plain delete the way they can a design row. This function runs as `security
+-- definer` (elevated privileges) specifically to allow that, but is hard-scoped to auth.uid() —
+-- the caller's own id, taken from their JWT, with no parameter to target anyone else — so the
+-- elevated privileges can never be used to delete a different account. Deleting the auth.users
+-- row cascades to public.designs via its "on delete cascade" foreign key above, so this also
+-- wipes everything that user saved.
+create or replace function public.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+revoke all on function public.delete_own_account() from public;
+grant execute on function public.delete_own_account() to authenticated;

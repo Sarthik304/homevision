@@ -7,8 +7,9 @@ const mockAuth = {
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
 }
+const mockRpc = vi.fn()
 vi.mock('../lib/supabaseClient', () => ({
-  supabase: { auth: mockAuth },
+  supabase: { auth: mockAuth, rpc: (...args) => mockRpc(...args) },
 }))
 
 const mockReset = vi.fn()
@@ -82,6 +83,30 @@ describe('signIn', () => {
 
     expect(ok).toBe(true)
     expect(useAuthStore.getState().authError).toBeNull()
+  })
+})
+
+describe('deleteAccount', () => {
+  it('calls the delete_own_account RPC, then signs out locally on success', async () => {
+    mockRpc.mockResolvedValue({ error: null })
+    mockAuth.signOut.mockResolvedValue({ error: null })
+
+    const { ok } = await useAuthStore.getState().deleteAccount()
+
+    expect(ok).toBe(true)
+    expect(mockRpc).toHaveBeenCalledWith('delete_own_account')
+    expect(mockAuth.signOut).toHaveBeenCalled()
+    expect(useAuthStore.getState().authLoading).toBe(false)
+  })
+
+  it('surfaces the error and does not sign out when the RPC fails', async () => {
+    mockRpc.mockResolvedValue({ error: { message: 'not allowed' } })
+
+    const { ok } = await useAuthStore.getState().deleteAccount()
+
+    expect(ok).toBe(false)
+    expect(useAuthStore.getState().authError).toBe('not allowed')
+    expect(mockAuth.signOut).not.toHaveBeenCalled()
   })
 })
 
