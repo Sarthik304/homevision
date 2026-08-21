@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useHouseStore from '../../store/useHouseStore'
 import useAuthStore from '../../store/useAuthStore'
+import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import DesignsPanel from '../auth/DesignsPanel'
 import { getColors, radius } from '../../theme'
+import { shareLinkFor } from '../../utils/shareLink'
 
 export default function Navbar() {
   // useShallow avoids re-rendering on unrelated store changes (e.g. dragging a room)
@@ -21,8 +23,19 @@ export default function Navbar() {
   const { user, initializing, signOut } = useAuthStore(
     useShallow((s) => ({ user: s.user, initializing: s.initializing, signOut: s.signOut }))
   )
+  const { activeDesignId, designs, fetchDesigns } = useDesignsStore(
+    useShallow((s) => ({ activeDesignId: s.activeDesignId, designs: s.designs, fetchDesigns: s.fetchDesigns }))
+  )
   const color = getColors(darkMode)
   const [modal, setModal] = useState(null) // null | 'auth' | 'designs'
+
+  // fetched here too (DesignsPanel also does this on open) so "Open share link" knows the active
+  // design's public status right after sign-in, without requiring "My designs" to be opened first
+  useEffect(() => {
+    if (user) fetchDesigns(user.id)
+  }, [user, fetchDesigns])
+
+  const activeDesignIsPublic = designs.find((d) => d.id === activeDesignId)?.is_public ?? false
 
   return (
     <div
@@ -141,6 +154,25 @@ export default function Navbar() {
               <span style={{ fontSize: 12, color: color.muted, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user.email}
               </span>
+              {activeDesignIsPublic && (
+                <button
+                  className="pixel-btn"
+                  onClick={() => window.open(shareLinkFor(activeDesignId), '_blank', 'noopener')}
+                  title="Open this design's shareable link in a new tab"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: radius.sm,
+                    border: `1px solid ${color.border}`,
+                    background: color.surface,
+                    color: color.text,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  🔗 Open share link
+                </button>
+              )}
               <button
                 className="pixel-btn"
                 onClick={() => setModal('designs')}

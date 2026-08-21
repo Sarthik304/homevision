@@ -4,12 +4,7 @@ import useAuthStore from '../../store/useAuthStore'
 import useDesignsStore from '../../store/useDesignsStore'
 import Modal from '../ui/Modal'
 import { radius } from '../../theme'
-
-// the shareable link for a design — anyone who opens it can view+fork it, see
-// useDesignsStore.loadPublicDesign and the public-read RLS policy in supabase/schema.sql
-function shareLinkFor(designId) {
-  return `${window.location.origin}${window.location.pathname}?design=${designId}`
-}
+import { shareLinkFor } from '../../utils/shareLink'
 
 const selectDesignsState = (s) => ({
   designs: s.designs,
@@ -218,8 +213,8 @@ export default function DesignsPanel({ onClose, color }) {
                 </button>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, color: d.is_public ? color.brand : color.muted, flex: 1 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 10, color: d.is_public ? color.brand : color.muted, flex: 1, minWidth: '50%' }}>
                   {d.is_public ? '🔗 Shared — anyone with the link can view it' : 'Not shared'}
                 </span>
                 {d.is_public && (
@@ -227,14 +222,14 @@ export default function DesignsPanel({ onClose, color }) {
                     <button
                       className="pixel-btn"
                       onClick={() => window.open(shareLinkFor(d.id), '_blank', 'noopener')}
-                      style={{ ...smallButton, color: color.brand, borderColor: color.brand }}
+                      style={{ ...smallButton, color: color.brand, borderColor: color.brand, flexShrink: 0 }}
                     >
                       Open
                     </button>
                     <button
                       className="pixel-btn"
                       onClick={() => copyShareLink(d.id)}
-                      style={{ ...smallButton, color: color.brand, borderColor: color.brand }}
+                      style={{ ...smallButton, color: color.brand, borderColor: color.brand, flexShrink: 0 }}
                     >
                       {copiedId === d.id ? 'Copied!' : 'Copy link'}
                     </button>
@@ -243,7 +238,7 @@ export default function DesignsPanel({ onClose, color }) {
                 <button
                   className="pixel-btn"
                   onClick={() => setDesignPublic(user.id, d.id, !d.is_public)}
-                  style={smallButton}
+                  style={{ ...smallButton, flexShrink: 0 }}
                 >
                   {d.is_public ? 'Unshare' : 'Share'}
                 </button>
