@@ -54,8 +54,7 @@ export default function DesignsPanel({ onClose, color }) {
       setCopiedId(designId)
       setTimeout(() => setCopiedId((id) => (id === designId ? null : id)), 2000)
     } catch {
-      // clipboard permission denied/unavailable — fall back to a manual-copy prompt
-      // instead of silently claiming success
+      // clipboard unavailable — fall back to a manual-copy prompt
       window.prompt('Copy this link:', link)
     }
   }

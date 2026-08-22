@@ -13,10 +13,7 @@ const EPS = 0.001
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
-// Safari doesn't reliably synthesize a native "dblclick" on a WebGL canvas (the re-render
-// triggered by the first click's selection state change seems to fall outside its double-click
-// window), and touch double-tap isn't guaranteed to produce one either. Detecting the double
-// click/tap ourselves from two "click" events — which fire reliably everywhere — sidesteps both.
+// manual double-click detection (Safari/touch don't reliably fire native dblclick on canvas)
 const DOUBLE_CLICK_MS = 350
 
 function computeOpenings(length, doors, windows) {
@@ -33,7 +30,7 @@ function computeOpenings(length, doors, windows) {
     const w = Math.min(win.width, length)
     const start = Math.max(0, win.offset * length - w / 2)
     const end = Math.min(length, start + w)
-    // tall windows push the sill down instead of getting truncated at the top
+    // tall windows push the sill down rather than getting truncated
     const requestedHeight = Math.min(win.height, WALL_HEIGHT)
     const top = Math.min(WALL_HEIGHT, WINDOW_SILL + requestedHeight)
     const bottom = Math.max(0, top - requestedHeight)
@@ -43,8 +40,7 @@ function computeOpenings(length, doors, windows) {
   return openings
 }
 
-// clips segments to [trimStart, length - trimEnd] so adjacent walls butt-join instead of
-// overlapping (which z-fights — invisible with matching wall colors, but flickers when they differ)
+// trims segment ends so adjacent walls butt-join instead of overlapping/z-fighting
 function clipSegments(segments, trimStart, trimEnd, length) {
   const lo = trimStart
   const hi = length - trimEnd
@@ -59,7 +55,7 @@ function clipSegments(segments, trimStart, trimEnd, length) {
     .filter(Boolean)
 }
 
-// splits a wall's length x height rectangle into solid boxes around the openings
+// splits a wall rectangle into solid boxes around its door/window openings
 function buildSolidSegments(length, openings) {
   const bounds = new Set([0, length])
   openings.forEach((o) => {
@@ -102,8 +98,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-// flat L-shaped mesh for the floor/ceiling. `flipY` compensates for the floor/ceiling using
-// opposite X rotations (see the meshes below), which flips how their local Y maps onto world Z.
+// flat L-shaped mesh used for floor/ceiling (`flipY` handles their opposite X rotations)
 function buildLShape(width, height, notchWidth, notchHeight, flipY) {
   const points = getLPolygon(width, height, notchWidth, notchHeight)
   const shape = new Shape()

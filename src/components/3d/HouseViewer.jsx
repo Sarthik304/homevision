@@ -28,7 +28,7 @@ function PipetteIcon() {
   )
 }
 
-// useShallow avoids re-rendering on unrelated store changes
+// state selector for useShallow
 const selectHouseViewerState = (s) => ({
   rooms: s.rooms,
   selectedRoomId: s.selectedRoomId,
@@ -54,7 +54,7 @@ export default function HouseViewer() {
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [colorPicker, setColorPicker] = useState(null) // { roomId, kind, key, x, y }
-  const [pickMode, setPickMode] = useState(false) // sampling a colour from another wall
+  const [pickMode, setPickMode] = useState(false) // eyedropper: sampling colour from another wall
 
   const handleSelectWall = (kind, key) => {
     if (kind === 'boundary') selectBoundaryWall(key)
@@ -98,8 +98,7 @@ export default function HouseViewer() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [pickMode])
 
-  // rooms use absolute 2D coords that can drift far from the origin — recenter on the
-  // bounding-box middle so the house stays on the grid instead of drifting off it
+  // recenter the house on the grid (rooms use absolute 2D coords)
   const houseOffset = (() => {
     if (rooms.length === 0) return [0, 0]
     const bounds = rooms.reduce(

@@ -54,9 +54,7 @@ const WALL_LABELS = {
   notchH: 'Notch (top)',
 }
 
-// Keeps its own text while focused so a keystroke that dips below `min` (e.g. typing "1" of "12"
-// while feet's min of ~3.28 sits mid-number) isn't immediately clamped and overwritten mid-type.
-// Only clamps to [min, max] on blur, once the user is done typing.
+// Number input that only clamps to [min, max] on blur, so mid-typing isn't overwritten
 function DimensionInput({ valueMeters, unit, min, max, onCommit, style, step = 0.1 }) {
   const [text, setText] = useState(() => String(roundDisplayLength(valueMeters, unit)))
   const [focused, setFocused] = useState(false)
@@ -451,7 +449,7 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
   )
 }
 
-// useShallow avoids re-rendering on unrelated store changes (e.g. dragging a room)
+// state selector for useShallow
 const selectSidebarState = (s) => ({
   rooms: s.rooms,
   selectedRoomId: s.selectedRoomId,
@@ -545,7 +543,6 @@ export default function Sidebar() {
   const doorWall = availableWalls.includes(doorWallChoice) ? doorWallChoice : availableWalls[0]
   const windowWall = availableWalls.includes(windowWallChoice) ? windowWallChoice : availableWalls[0]
 
-  // a 3D-view wall click opens its colour picker here too
   useEffect(() => {
     if (selectedBoundaryWallKey) setColorTarget(`boundary:${selectedBoundaryWallKey}`)
   }, [selectedBoundaryWallKey])

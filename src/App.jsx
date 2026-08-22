@@ -8,8 +8,7 @@ import useAuthStore from './store/useAuthStore'
 import useDesignsStore from './store/useDesignsStore'
 import { getColors } from './theme'
 
-// three.js + @react-three/fiber + drei (~5MB) are only needed for the 3D view — lazy() defers
-// loading them until it's opened
+// lazy-load the 3D view — three.js/fiber/drei are ~5MB, only needed once opened
 const HouseViewer = lazy(() => import('./components/3d/HouseViewer'))
 
 export default function App() {
@@ -17,15 +16,12 @@ export default function App() {
   const darkMode = useHouseStore((s) => s.darkMode)
   const color = getColors(darkMode)
 
-  // once per app load: pick up any existing Supabase session and subscribe to future auth changes.
-  // The returned unsubscribe is StrictMode-safe (see useAuthStore.init).
+  // pick up existing Supabase session, subscribe to auth changes
   useEffect(() => {
     return useAuthStore.getState().init()
   }, [])
 
-  // a shareable link looks like <app>/?design=<uuid> — load it once on mount (works even
-  // signed-out, see loadPublicDesign), then strip it from the URL so a later refresh doesn't
-  // re-fetch and clobber whatever the visitor has since edited locally
+  // load a shared design from ?design=<uuid>, then strip it from the URL
   useEffect(() => {
     const designId = new URLSearchParams(window.location.search).get('design')
     if (!designId) return

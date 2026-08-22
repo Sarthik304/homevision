@@ -6,9 +6,8 @@ import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import { getColors, radius } from '../../theme'
 
-// Shown when the current view was loaded from someone else's shareable link (see
-// App.jsx's ?design= handling and useDesignsStore.loadPublicDesign). Lets the visitor
-// save their own independent copy — the original design is never touched by them.
+// Shown when the current view was loaded from someone else's shareable link. Lets the visitor
+// save their own independent copy — the original is never touched by them.
 export default function SharedDesignBanner() {
   const darkMode = useHouseStore((s) => s.darkMode)
   const color = getColors(darkMode)
@@ -23,9 +22,7 @@ export default function SharedDesignBanner() {
     }))
   )
   const [showAuth, setShowAuth] = useState(false)
-  // saveDesign clears sharedDesign in the store on success (it's no longer "someone else's"
-  // once saved), so the post-save confirmation is tracked here instead of reading it back
-  const [savedName, setSavedName] = useState(null)
+  const [savedName, setSavedName] = useState(null) // post-save confirmation (sharedDesign is cleared by then)
 
   if (!sharedDesign && !savedName && !sharedDesignError) return null
 

@@ -9,7 +9,6 @@ import { getColors, radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
 
 export default function Navbar() {
-  // useShallow avoids re-rendering on unrelated store changes (e.g. dragging a room)
   const { activeView, setActiveView, darkMode, toggleDarkMode, unit, toggleUnit } = useHouseStore(
     useShallow((s) => ({
       activeView: s.activeView,
@@ -29,8 +28,7 @@ export default function Navbar() {
   const color = getColors(darkMode)
   const [modal, setModal] = useState(null) // null | 'auth' | 'designs'
 
-  // fetched here too (DesignsPanel also does this on open) so "Open share link" knows the active
-  // design's public status right after sign-in, without requiring "My designs" to be opened first
+  // fetches designs so "Open share link" knows the active design's public status after sign-in
   useEffect(() => {
     if (user) fetchDesigns(user.id)
   }, [user, fetchDesigns])

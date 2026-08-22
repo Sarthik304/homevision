@@ -1,15 +1,10 @@
-// Pure geometry for interior-wall drag/stretch and marquee selection, extracted from
-// FloorPlanEditor so it's unit-testable without Konva — which is what makes the "runaway drag"
-// bug (see computeWallBodyTranslate) catchable at all; it only showed up with real per-frame Konva state.
+// Pure geometry for interior-wall drag/stretch and marquee selection (Konva-free, unit-testable).
 
-export const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters — smallest an interior wall can be dragged down to
-export const SNAP_POINT_THRESHOLD = 0.35 // meters — endpoint snap distance to room corners/other walls' endpoints
-export const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees — angle-snap distance, shared by interior wall endpoints and room rotation
+export const MIN_INTERIOR_WALL_LENGTH = 0.2 // meters, smallest an interior wall can be dragged to
+export const SNAP_POINT_THRESHOLD = 0.35 // meters, endpoint snap distance to corners/other walls
+export const SNAP_ANGLE_THRESHOLD_DEG = 6 // degrees, angle-snap distance (endpoints + room rotation)
 
-// translates a wall's ORIGINAL endpoints (snapshotted once at drag-start — see wallBodyDragRef in
-// FloorPlanEditor) by (dxM, dyM), clamped so neither endpoint leaves the room. Must apply to that
-// fixed starting point, not the live store value — Konva reports (dxM, dyM) as the TOTAL offset
-// since drag-start, so adding it onto an already-updated position double-counts every frame.
+// translates a wall's original (drag-start) endpoints by (dxM, dyM), clamped to the room
 export function computeWallBodyTranslate(origin, roomWidth, roomHeight, dxM, dyM) {
   const minDx = -Math.min(origin.x1, origin.x2)
   const maxDx = roomWidth - Math.max(origin.x1, origin.x2)
@@ -62,8 +57,7 @@ export function snapInteriorWallEndpoint(room, wall, otherX, otherY, rawX, rawY)
   return { x: rawX, y: rawY }
 }
 
-// full pipeline for a dragged endpoint ('a' is x1/y1, 'b' is x2/y2): clamp the raw pointer to the
-// room, snap it, then enforce the minimum wall length by walking back along the drag angle
+// clamps a dragged endpoint ('a'=x1/y1, 'b'=x2/y2) to the room, snaps it, enforces min length
 export function computeWallEndpointMove(room, wall, endpoint, rawX, rawY) {
   const otherX = endpoint === 'a' ? wall.x2 : wall.x1
   const otherY = endpoint === 'a' ? wall.y2 : wall.y1
@@ -84,8 +78,7 @@ export function computeWallEndpointMove(room, wall, endpoint, rawX, rawY) {
   return { x, y, updates: endpoint === 'a' ? { x1: x, y1: y } : { x2: x, y2: y } }
 }
 
-// which room ids a marquee (rubber-band) box overlaps, in the same world-pixel space FloorPlanEditor
-// renders rooms in (room meters -> pixels via scale/padding)
+// which room ids a marquee (rubber-band) box overlaps, in world-pixel space
 export function roomsInMarquee(rooms, marquee, scale, padding) {
   const minX = Math.min(marquee.x1, marquee.x2)
   const maxX = Math.max(marquee.x1, marquee.x2)

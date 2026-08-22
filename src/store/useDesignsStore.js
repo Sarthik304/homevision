@@ -2,8 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabaseClient'
 import useHouseStore from './useHouseStore'
 
-// Saved-designs CRUD against Supabase, plus which design (if any) is currently loaded/being
-// edited. Reads/writes useHouseStore's `rooms` directly rather than duplicating it here.
+// Saved-designs CRUD against Supabase, plus which design is currently loaded/being edited.
 const useDesignsStore = create((set, get) => ({
   designs: [], // [{ id, name, updated_at, is_public }] for the signed-in user, newest first
   loadingDesigns: false,
@@ -12,12 +11,8 @@ const useDesignsStore = create((set, get) => ({
   designsError: null,
   activeDesignId: null,
   activeDesignName: null,
-  // someone else's design, opened via its shareable link (see loadPublicDesign) — distinct from
-  // activeDesignId, which only ever refers to a design *this* user owns and can save over
-  sharedDesign: null, // { id, name } | null
-  // kept separate from designsError so a broken/expired share link can show its own message
-  // (SharedDesignBanner) without being confused with unrelated My-designs errors (DesignsPanel)
-  sharedDesignError: null,
+  sharedDesign: null, // { id, name } | null — someone else's design opened via share link
+  sharedDesignError: null, // separate from designsError so share-link errors show independently
 
   fetchDesigns: async (userId) => {
     if (!supabase || !userId) return
@@ -55,8 +50,6 @@ const useDesignsStore = create((set, get) => ({
           .single()
 
     if (!error) {
-      // a save always produces/updates a design *this* user owns, so any "viewing a shared
-      // design" banner no longer applies once it succeeds
       set({ activeDesignId: data.id, activeDesignName: data.name, sharedDesign: null })
       get().fetchDesigns(userId)
     }
@@ -81,9 +74,7 @@ const useDesignsStore = create((set, get) => ({
     return true
   },
 
-  // flips a design's shareable-link visibility. Only the owner can succeed (enforced by the
-  // "Users can update their own designs" RLS policy — see supabase/schema.sql), so no ownership
-  // check is needed client-side, matching deleteDesign's existing pattern.
+  // flips a design's shareable-link visibility (RLS enforces owner-only on the backend)
   setDesignPublic: async (userId, designId, isPublic) => {
     if (!supabase || !userId) return false
     set({ designsError: null })
@@ -93,10 +84,8 @@ const useDesignsStore = create((set, get) => ({
     return !error
   },
 
-  // loads a design shared via its link (see the "Share" toggle in DesignsPanel) — works for
-  // signed-out visitors too, since RLS's public-read policy doesn't require auth. Deliberately
-  // leaves activeDesignId untouched (null unless already editing one's own design) so a
-  // subsequent saveDesign creates the viewer's own copy instead of overwriting the original.
+  // loads a design shared via its link; works signed-out; leaves activeDesignId untouched so a
+  // later save creates the viewer's own copy instead of overwriting the original
   loadPublicDesign: async (designId) => {
     if (!supabase) return false
     set({ sharedDesignError: null })
@@ -126,8 +115,7 @@ const useDesignsStore = create((set, get) => ({
     set({ designsError: error?.message ?? null })
   },
 
-  // wipes every saved design for this user — RLS scopes the delete to their own rows, so this
-  // can never touch another user's data even though it has no per-row id filter
+  // wipes every saved design for this user (RLS scopes the delete to their own rows)
   deleteAllDesigns: async (userId) => {
     if (!supabase || !userId) return false
     set({ deletingAllDesigns: true, designsError: null })
@@ -143,7 +131,7 @@ const useDesignsStore = create((set, get) => ({
   startNewDesign: () =>
     set({ activeDesignId: null, activeDesignName: null, sharedDesign: null, sharedDesignError: null }),
 
-  // cleared on sign-out so the next signed-in user doesn't briefly see the previous one's list
+  // cleared on sign-out
   reset: () =>
     set({
       designs: [],

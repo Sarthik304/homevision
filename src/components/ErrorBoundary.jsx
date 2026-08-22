@@ -1,7 +1,6 @@
 import { Component } from 'react'
 
 // Catches render errors below it, showing a recoverable message instead of a blank screen.
-// Must be a class component — no hook equivalent for getDerivedStateFromError/componentDidCatch.
 export default class ErrorBoundary extends Component {
   state = { error: null }
 

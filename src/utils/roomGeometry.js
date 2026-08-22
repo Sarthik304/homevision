@@ -1,10 +1,8 @@
-// Pure room-geometry math shared by the 2D editor's drag/resize/rotate handling. Kept dependency-free
-// (no Konva/React) so it can be unit tested directly instead of only through canvas interaction.
+// Pure room-geometry math for the 2D editor's drag/resize/rotate handling (framework-free).
 
-export const SNAP_THRESHOLD = 0.6 // meters — how close an edge has to get before it snaps flush
+export const SNAP_THRESHOLD = 0.6 // meters, how close an edge has to get before it snaps flush
 
-// rotates point (px,py) by `deg` around (cx,cy); positive deg is clockwise, matching both Konva's
-// `rotation` prop and the angle convention room-rotation math derives from the pointer
+// rotates point (px,py) by `deg` around (cx,cy); positive deg is clockwise (matches Konva)
 export function rotateAround(px, py, cx, cy, deg) {
   const rad = (deg * Math.PI) / 180
   const cos = Math.cos(rad)
@@ -14,9 +12,7 @@ export function rotateAround(px, py, cx, cy, deg) {
   return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos }
 }
 
-// a room rotated by a multiple of 90° is still axis-aligned on screen — 90°/270° just swap which
-// of its width/height reads as "wide" — so it can still snap against other rooms. Anything off
-// that grid isn't a rectangle in screen space anymore, so it's excluded (returns null) entirely.
+// screen-space bounding box for rooms on the 90° grid (width/height swap at 90°/270°); null otherwise
 export function getRoomAABB(room) {
   const rotation = (((room.rotation ?? 0) % 360) + 360) % 360
   if (rotation % 90 !== 0) return null
@@ -73,8 +69,7 @@ export function getSnappedPosition(room, otherRooms, x, y) {
     }
   })
 
-  // corner-to-corner snapping: when a corner of the dragged room lands near another room's corner
-  // (no shared edge needed, e.g. diagonal rooms), pull it so the two corners coincide exactly.
+  // corner-to-corner snapping for diagonal rooms with no shared edge
   const draggedCorners = [
     { x, y },
     { x: x + w, y },

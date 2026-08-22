@@ -5,10 +5,7 @@ import { radius } from '../../theme'
 
 const CONFIRM_WORD = 'DELETE'
 
-// A "danger zone" for the signed-in user's whole account, not just their designs. Requires
-// typing a literal confirmation word — heavier friction than the window.confirm used for single
-// designs/rooms, because this is meaningfully more severe: it also removes the ability to sign
-// back in with this email, and it isn't scoped to "one thing," it's everything.
+// "Danger zone" for deleting the whole account — requires typing a confirmation word
 export default function DeleteAccountSection({ savedDesignCount, onDeleted, color }) {
   const { deleteAccount, authLoading, authError, clearAuthError } = useAuthStore(
     useShallow((s) => ({
