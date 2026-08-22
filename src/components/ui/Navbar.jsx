@@ -5,6 +5,7 @@ import useAuthStore from '../../store/useAuthStore'
 import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import DesignsPanel from '../auth/DesignsPanel'
+import OpenDesignModal from './OpenDesignModal'
 import { getColors, radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
 
@@ -26,7 +27,7 @@ export default function Navbar() {
     useShallow((s) => ({ activeDesignId: s.activeDesignId, designs: s.designs, fetchDesigns: s.fetchDesigns }))
   )
   const color = getColors(darkMode)
-  const [modal, setModal] = useState(null) // null | 'auth' | 'designs'
+  const [modal, setModal] = useState(null) // null | 'auth' | 'designs' | 'open-design'
 
   // fetches designs so "Open share link" knows the active design's public status after sign-in
   useEffect(() => {
@@ -145,6 +146,24 @@ export default function Navbar() {
         {darkMode ? 'Light mode' : 'Dark mode'}
       </button>
 
+      <button
+        className="pixel-btn"
+        onClick={() => setModal('open-design')}
+        title="Open a design from its shared link"
+        style={{
+          padding: '6px 12px',
+          borderRadius: radius.sm,
+          border: `1px solid ${color.border}`,
+          background: color.surface,
+          color: color.text,
+          cursor: 'pointer',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        Open design
+      </button>
+
       {!initializing && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {user ? (
@@ -228,6 +247,7 @@ export default function Navbar() {
 
       {modal === 'auth' && <AuthModal onClose={() => setModal(null)} color={color} />}
       {modal === 'designs' && user && <DesignsPanel onClose={() => setModal(null)} color={color} />}
+      {modal === 'open-design' && <OpenDesignModal onClose={() => setModal(null)} color={color} />}
     </div>
   )
 }
