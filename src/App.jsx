@@ -21,6 +21,20 @@ export default function App() {
     return useAuthStore.getState().init()
   }, [])
 
+  // preloads the 3D view's chunk + environment HDRI during idle time so the first switch to it
+  // doesn't pay the fetch+evaluate cost mid-transition, which was contributing to the "3D view
+  // doesn't respond to drags at first" bug (Canvas/OrbitControls settling while still loading —
+  // see RESIZE_OPTIONS in HouseViewer.jsx for the other half of that fix)
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((cb) => setTimeout(cb, 200))
+    const cancelIdle = window.cancelIdleCallback ?? clearTimeout
+    const id = idle(() => {
+      import('./components/3d/HouseViewer')
+      import('@react-three/drei').then(({ useEnvironment }) => useEnvironment.preload({ preset: 'apartment' }))
+    })
+    return () => cancelIdle(id)
+  }, [])
+
   // load a shared design from ?design=<uuid>, then strip it from the URL
   useEffect(() => {
     const designId = new URLSearchParams(window.location.search).get('design')

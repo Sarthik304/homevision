@@ -10,6 +10,13 @@ import { getColors, radius } from '../../theme'
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
 const POPUP_HEIGHT = 250
+// hoisted so Canvas's `camera` prop keeps a stable reference across renders
+const INITIAL_CAMERA = { position: [20, 20, 20], fov: 50, near: 0.1, far: 1000 }
+// the container's measured size settles over a few ResizeObserver callbacks right after mount;
+// with no debounce (R3F's default) each one makes Canvas fully reconnect its event listeners,
+// which was dropping OrbitControls mid-setup and leaving the 3D view unresponsive to drags for
+// the first second or two after opening it
+const RESIZE_OPTIONS = { debounce: { resize: 100 } }
 
 function getWallColor(room, kind, key) {
   if (!room) return '#ffffff'
@@ -134,15 +141,7 @@ export default function HouseViewer() {
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', cursor: pickMode ? 'crosshair' : 'default' }}>
-      <Canvas
-        camera={{
-          position: [20, 20, 20],
-          fov: 50,
-          near: 0.1,
-          far: 1000,
-        }}
-        shadows
-      >
+      <Canvas camera={INITIAL_CAMERA} shadows resize={RESIZE_OPTIONS}>
         <color attach="background" args={[color.workspace]} />
 
         <ambientLight intensity={darkMode ? 0.3 : 0.5} />
