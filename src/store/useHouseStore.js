@@ -118,6 +118,7 @@ function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape })
     doors: [],
     windows: [],
     interiorWalls: [],
+    furniture: [],
   }
 }
 
@@ -137,6 +138,7 @@ const useHouseStore = create((set) => ({
       doors: [],
       windows: [],
       interiorWalls: [],
+      furniture: [],
     },
     {
       id: 2,
@@ -152,6 +154,7 @@ const useHouseStore = create((set) => ({
       doors: [],
       windows: [],
       interiorWalls: [],
+      furniture: [],
     },
   ],
 
@@ -536,6 +539,53 @@ const useHouseStore = create((set) => ({
         ...w,
         windows: w.windows.filter((win) => win.id !== windowId),
       })),
+    })),
+
+  // drops a furniture preset centered in the room
+  addFurniture: (roomId, preset) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) => {
+        if (room.id !== roomId) return room
+        const { type, label, width, depth, height, color } = preset
+        return {
+          ...room,
+          furniture: [
+            ...(room.furniture ?? []),
+            {
+              id: nextId(),
+              type,
+              label,
+              x: Math.max(0, (room.width - width) / 2),
+              y: Math.max(0, (room.height - depth) / 2),
+              width,
+              depth,
+              height,
+              color,
+            },
+          ],
+        }
+      }),
+    })),
+
+  updateFurniture: (roomId, furnitureId, updates) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              furniture: (room.furniture ?? []).map((f) => (f.id === furnitureId ? { ...f, ...updates } : f)),
+            }
+          : room
+      ),
+    })),
+
+  removeFurniture: (roomId, furnitureId) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, furniture: (room.furniture ?? []).filter((f) => f.id !== furnitureId) }
+          : room
+      ),
     })),
 }))
 

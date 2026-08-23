@@ -322,6 +322,62 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
   })
 }
 
+// dummy furniture: a draggable box per item, clamped to the room's own footprint
+function RoomFurniture({ room, color, updateFurniture }) {
+  const items = room.furniture ?? []
+
+  return items.map((item) => {
+    const clampToRoom = (e) => {
+      const rawX = e.target.x() / SCALE
+      const rawY = e.target.y() / SCALE
+      const x = Math.min(Math.max(0, rawX), Math.max(0, room.width - item.width))
+      const y = Math.min(Math.max(0, rawY), Math.max(0, room.height - item.depth))
+      e.target.x(x * SCALE)
+      e.target.y(y * SCALE)
+      return { x, y }
+    }
+
+    return (
+      <Group key={item.id}>
+        <Rect
+          x={item.x * SCALE}
+          y={item.y * SCALE}
+          width={item.width * SCALE}
+          height={item.depth * SCALE}
+          fill={item.color}
+          opacity={0.85}
+          stroke={color.text}
+          strokeWidth={1}
+          cornerRadius={3}
+          draggable
+          onDragMove={clampToRoom}
+          onDragEnd={(e) => {
+            const { x, y } = clampToRoom(e)
+            updateFurniture(room.id, item.id, { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 })
+          }}
+          onMouseEnter={(e) => {
+            e.target.getStage().container().style.cursor = 'move'
+          }}
+          onMouseLeave={(e) => {
+            e.target.getStage().container().style.cursor = 'default'
+          }}
+        />
+        <Text
+          text={item.label}
+          x={item.x * SCALE}
+          y={item.y * SCALE + (item.depth * SCALE) / 2 - 6}
+          width={item.width * SCALE}
+          align="center"
+          fontSize={10}
+          fill={color.text}
+          fontFamily={font}
+          listening={false}
+        />
+      </Group>
+    )
+  })
+}
+
 // dumb node; x/y is the handle's target midpoint in stage-pixel space
 function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResizeEnd }) {
   return (
@@ -393,6 +449,7 @@ const selectFloorPlanState = (s) => ({
   selectedInteriorWallId: s.selectedInteriorWallId,
   selectInteriorWall: s.selectInteriorWall,
   updateInteriorWall: s.updateInteriorWall,
+  updateFurniture: s.updateFurniture,
   darkMode: s.darkMode,
   unit: s.unit,
   setViewCenter: s.setViewCenter,
@@ -411,6 +468,7 @@ export default function FloorPlanEditor() {
     selectedInteriorWallId,
     selectInteriorWall,
     updateInteriorWall,
+    updateFurniture,
     darkMode,
     unit,
     setViewCenter,
@@ -984,6 +1042,8 @@ export default function FloorPlanEditor() {
                   onEndpointMove={handleInteriorWallEndpointMove}
                   onEndpointEnd={handleInteriorWallEndpointEnd}
                 />
+
+                <RoomFurniture room={room} color={color} updateFurniture={updateFurniture} />
 
                 <Text
                   text={room.name}

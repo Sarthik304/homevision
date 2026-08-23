@@ -271,6 +271,20 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
         )
       })}
 
+      {(room.furniture ?? []).map((item) => (
+        <mesh
+          key={item.id}
+          position={[
+            item.x + item.width / 2 - width / 2,
+            item.height / 2,
+            item.y + item.depth / 2 - height / 2,
+          ]}
+        >
+          <boxGeometry args={[item.width, item.height, item.depth]} />
+          <meshStandardMaterial color={item.color} />
+        </mesh>
+      ))}
+
       {isSelected && (
         <mesh position={[0, WALL_HEIGHT / 2, 0]} raycast={() => null}>
           <boxGeometry args={[width, WALL_HEIGHT, height]} />

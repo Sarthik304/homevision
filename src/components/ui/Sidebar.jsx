@@ -5,6 +5,7 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { MIN_ROOM_SIZE } from '../../constants/floorPlan'
 import { getWallKeys, MIN_NOTCH } from '../../constants/lshape'
+import { FURNITURE_PRESETS } from '../../constants/furniture'
 import { formatLength, fromDisplayLength, roundDisplayLength } from '../../utils/units'
 
 const getSectionHeader = (color) => ({
@@ -449,6 +450,32 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
   )
 }
 
+function FurnitureRow({ item, onRemove, color }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 12,
+        background: color.surface,
+        borderRadius: radius.sm,
+        padding: '6px 8px',
+      }}
+    >
+      <div style={{ width: 10, height: 10, borderRadius: 2, background: item.color, flexShrink: 0 }} />
+      <span style={{ flex: 1, color: color.text }}>{item.label}</span>
+      <button
+        onClick={() => onRemove(item.id)}
+        style={{ background: 'transparent', border: 'none', color: color.danger, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
+        aria-label={`Remove ${item.label}`}
+      >
+        ×
+      </button>
+    </div>
+  )
+}
+
 // state selector for useShallow
 const selectSidebarState = (s) => ({
   rooms: s.rooms,
@@ -478,6 +505,8 @@ const selectSidebarState = (s) => ({
   addInteriorWindow: s.addInteriorWindow,
   updateInteriorWindow: s.updateInteriorWindow,
   removeInteriorWindow: s.removeInteriorWindow,
+  addFurniture: s.addFurniture,
+  removeFurniture: s.removeFurniture,
   darkMode: s.darkMode,
   unit: s.unit,
 })
@@ -511,6 +540,8 @@ export default function Sidebar() {
     addInteriorWindow,
     updateInteriorWindow,
     removeInteriorWindow,
+    addFurniture,
+    removeFurniture,
     darkMode,
     unit,
   } = useHouseStore(useShallow(selectSidebarState))
@@ -853,6 +884,51 @@ export default function Sidebar() {
 
             <div style={{ fontSize: 11, color: color.muted }}>
               Drag a wall or its endpoints in the 2D view to position and resize it.
+            </div>
+          </div>
+
+          <div style={{ height: 1, background: color.border }} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={sectionHeader}>Furniture</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              {FURNITURE_PRESETS.map((preset) => (
+                <button
+                  key={preset.type}
+                  className="pixel-btn"
+                  onClick={() => addFurniture(selectedRoom.id, preset)}
+                  style={{
+                    padding: '7px 0',
+                    borderRadius: radius.sm,
+                    border: `1px solid ${color.border}`,
+                    background: color.bg,
+                    color: color.text,
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  + {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {(selectedRoom.furniture ?? []).length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {selectedRoom.furniture.map((item) => (
+                  <FurnitureRow
+                    key={item.id}
+                    item={item}
+                    onRemove={(id) => removeFurniture(selectedRoom.id, id)}
+                    color={color}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, color: color.muted }}>
+              Drag furniture in the 2D view to position it.
             </div>
           </div>
 
