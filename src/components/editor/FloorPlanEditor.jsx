@@ -13,7 +13,8 @@ import {
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
 import { formatLength } from '../../utils/units'
-import { resizeFurnitureCorner } from '../../utils/furnitureGeometry'
+import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
+import DimensionInput from '../ui/DimensionInput'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
@@ -30,6 +31,11 @@ const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
 const FURNITURE_CORNERS = ['tl', 'tr', 'bl', 'br']
 const FURNITURE_CORNER_CURSORS = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' }
+const DIMENSION_POPUP_WIDTH = 180
+const DIMENSION_POPUP_HEIGHT = 190
+// manual double-click detection (Konva's built-in dblclick is unreliable on draggable shapes,
+// same reasoning as Room3D.jsx's WallWithOpenings)
+const DOUBLE_CLICK_MS = 350
 
 // cuts door gaps out of a wall, returns remaining [start, end] solid stretches
 function solidWallStretches(lengthPx, doors) {
@@ -367,7 +373,7 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
           draggable
           onClick={(e) => {
             e.cancelBubble = true
-            onSelect(item.id)
+            onSelect(room.id, item.id, e.evt)
           }}
           onDragMove={clampToRoom}
           onDragEnd={(e) => {
@@ -408,7 +414,7 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
                 strokeWidth={1.5}
                 cornerRadius={2}
                 draggable
-                hitStrokeWidth={16}
+                hitStrokeWidth={6}
                 onDragMove={(e) => onResizeMove(e, room.id, item.id, corner)}
                 onDragEnd={(e) => onResizeEnd(e, room.id, item.id, corner)}
                 onMouseEnter={(e) => {
@@ -531,13 +537,18 @@ export default function FloorPlanEditor() {
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [isShiftHeld, setIsShiftHeld] = useState(false)
   const [marquee, setMarquee] = useState(null) // rubber-band selection box, world-pixel space
+  const [dimensionPopup, setDimensionPopup] = useState(null) // { roomId, furnitureId, x, y } | null
   const groupDragRef = useRef(null) // group-drag start snapshot (see handleGroupDragMove)
   const wallBodyDragRef = useRef(null) // interior wall drag start snapshot (see startInteriorWallBodyDrag)
+  const furnitureClickRef = useRef({ id: null, time: 0 }) // last furniture click, for double-click detection
 
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Shift') setIsShiftHeld(true)
-      if (e.key === 'Escape') setSelectedRoomIds([])
+      if (e.key === 'Escape') {
+        if (dimensionPopup) setDimensionPopup(null)
+        else setSelectedRoomIds([])
+      }
     }
     const handleKeyUp = (e) => {
       if (e.key === 'Shift') setIsShiftHeld(false)
@@ -548,7 +559,7 @@ export default function FloorPlanEditor() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [setSelectedRoomIds])
+  }, [setSelectedRoomIds, dimensionPopup])
 
   // syncs viewCenter so new rooms spawn where the user is looking
   useEffect(() => {
@@ -697,6 +708,37 @@ export default function FloorPlanEditor() {
     if (isShiftHeld) return
     if (e.target !== e.target.getStage()) return
     selectRoom(null)
+    setDimensionPopup(null)
+  }
+
+  // selects the clicked furniture item; two clicks on the same item within DOUBLE_CLICK_MS
+  // open the dimensions popup instead (see DOUBLE_CLICK_MS for why this isn't Konva's onDblClick)
+  function handleFurnitureClick(roomId, furnitureId, nativeEvent) {
+    selectFurniture(furnitureId)
+
+    const now = performance.now()
+    const last = furnitureClickRef.current
+    if (last.id === furnitureId && now - last.time < DOUBLE_CLICK_MS) {
+      furnitureClickRef.current = { id: null, time: 0 }
+      openDimensionPopup(roomId, furnitureId, nativeEvent)
+    } else {
+      furnitureClickRef.current = { id: furnitureId, time: now }
+      setDimensionPopup(null)
+    }
+  }
+
+  // opens a popup to type a furniture item's exact width/depth/height
+  function openDimensionPopup(roomId, furnitureId, nativeEvent) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const rawX = nativeEvent.clientX - rect.left
+    const rawY = nativeEvent.clientY - rect.top
+    setDimensionPopup({
+      roomId,
+      furnitureId,
+      x: Math.min(Math.max(8, rawX), rect.width - DIMENSION_POPUP_WIDTH - 8),
+      y: Math.min(Math.max(8, rawY), rect.height - DIMENSION_POPUP_HEIGHT - 8),
+    })
   }
 
   function resizeRoomForEdge(e, roomId, edge) {
@@ -1031,6 +1073,9 @@ export default function FloorPlanEditor() {
     setStagePos({ x: 0, y: 0 })
   }
 
+  const dimensionPopupRoom = dimensionPopup ? rooms.find((r) => r.id === dimensionPopup.roomId) : null
+  const dimensionPopupItem = dimensionPopupRoom?.furniture?.find((f) => f.id === dimensionPopup?.furnitureId)
+
   return (
     <div
       ref={containerRef}
@@ -1136,7 +1181,7 @@ export default function FloorPlanEditor() {
                   room={room}
                   color={color}
                   selectedFurnitureId={selectedFurnitureId}
-                  onSelect={selectFurniture}
+                  onSelect={handleFurnitureClick}
                   updateFurniture={updateFurniture}
                   onResizeMove={handleFurnitureResizeMove}
                   onResizeEnd={handleFurnitureResizeEnd}
@@ -1282,6 +1327,83 @@ export default function FloorPlanEditor() {
           )}
         </Layer>
       </Stage>
+
+      {dimensionPopup && dimensionPopupItem && (
+        <div
+          className="pixel-shadow"
+          style={{
+            position: 'absolute',
+            left: dimensionPopup.x,
+            top: dimensionPopup.y,
+            width: DIMENSION_POPUP_WIDTH,
+            background: color.bg,
+            border: `1.5px solid ${color.text}`,
+            borderRadius: radius.md,
+            '--pixel-shadow-color': color.text,
+            padding: 10,
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 8,
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>{dimensionPopupItem.label} size</span>
+            <button
+              onClick={() => setDimensionPopup(null)}
+              aria-label="Close"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: color.muted,
+                cursor: 'pointer',
+                fontSize: 15,
+                lineHeight: 1,
+                padding: '2px 4px',
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              ['width', 'Width'],
+              ['depth', 'Depth'],
+              ['height', 'Height'],
+            ].map(([key, label]) => (
+              <div key={key}>
+                <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>
+                  {label} ({unit})
+                </label>
+                <DimensionInput
+                  valueMeters={dimensionPopupItem[key]}
+                  unit={unit}
+                  min={MIN_FURNITURE_SIZE}
+                  onCommit={(meters) =>
+                    updateFurniture(dimensionPopup.roomId, dimensionPopup.furnitureId, { [key]: meters })
+                  }
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontSize: 12,
+                    border: `1px solid ${color.borderInput}`,
+                    borderRadius: radius.sm,
+                    background: color.surface,
+                    color: color.text,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div
         className="pixel-shadow"
