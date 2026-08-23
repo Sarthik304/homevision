@@ -162,6 +162,7 @@ const useHouseStore = create((set) => ({
   selectedRoomIds: [], // multi-selected room ids in the 2D view (dragging any moves them all)
   selectedInteriorWallId: null,
   selectedBoundaryWallKey: null,
+  selectedFurnitureId: null,
   activeView: '2d',
   darkMode: false,
   unit: 'm', // display unit only ('m'/'ft') — geometry is always stored in meters
@@ -173,13 +174,14 @@ const useHouseStore = create((set) => ({
 
   setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 
-  // selects one room, clears wall selection, resets multi-select to just this room
+  // selects one room, clears wall/furniture selection, resets multi-select to just this room
   selectRoom: (id) =>
     set({
       selectedRoomId: id,
       selectedRoomIds: id ? [id] : [],
       selectedInteriorWallId: null,
       selectedBoundaryWallKey: null,
+      selectedFurnitureId: null,
     }),
 
   // shift-click: add/remove a room from the multi-select set
@@ -193,6 +195,7 @@ const useHouseStore = create((set) => ({
         selectedRoomId: selectedRoomIds.length === 1 ? selectedRoomIds[0] : null,
         selectedInteriorWallId: null,
         selectedBoundaryWallKey: null,
+        selectedFurnitureId: null,
       }
     }),
 
@@ -203,11 +206,17 @@ const useHouseStore = create((set) => ({
       selectedRoomId: ids.length === 1 ? ids[0] : null,
       selectedInteriorWallId: null,
       selectedBoundaryWallKey: null,
+      selectedFurnitureId: null,
     }),
 
-  selectInteriorWall: (wallId) => set({ selectedInteriorWallId: wallId, selectedBoundaryWallKey: null }),
+  selectInteriorWall: (wallId) =>
+    set({ selectedInteriorWallId: wallId, selectedBoundaryWallKey: null, selectedFurnitureId: null }),
 
-  selectBoundaryWall: (wallKey) => set({ selectedBoundaryWallKey: wallKey, selectedInteriorWallId: null }),
+  selectBoundaryWall: (wallKey) =>
+    set({ selectedBoundaryWallKey: wallKey, selectedInteriorWallId: null, selectedFurnitureId: null }),
+
+  selectFurniture: (id) =>
+    set({ selectedFurnitureId: id, selectedInteriorWallId: null, selectedBoundaryWallKey: null }),
 
   setActiveView: (view) => set({ activeView: view }),
 
@@ -219,6 +228,7 @@ const useHouseStore = create((set) => ({
       selectedRoomIds: [],
       selectedInteriorWallId: null,
       selectedBoundaryWallKey: null,
+      selectedFurnitureId: null,
     }),
 
   updateRoomColor: (id, type, color) =>
@@ -258,12 +268,16 @@ const useHouseStore = create((set) => ({
       const wallStillExists = rooms.some((room) =>
         (room.interiorWalls ?? []).some((w) => w.id === state.selectedInteriorWallId)
       )
+      const furnitureStillExists = rooms.some((room) =>
+        (room.furniture ?? []).some((f) => f.id === state.selectedFurnitureId)
+      )
       return {
         rooms,
         selectedRoomId: state.selectedRoomId === id ? null : state.selectedRoomId,
         selectedRoomIds: state.selectedRoomIds.filter((rid) => rid !== id),
         selectedInteriorWallId: wallStillExists ? state.selectedInteriorWallId : null,
         selectedBoundaryWallKey: state.selectedRoomId === id ? null : state.selectedBoundaryWallKey,
+        selectedFurnitureId: furnitureStillExists ? state.selectedFurnitureId : null,
       }
     }),
 
@@ -586,6 +600,7 @@ const useHouseStore = create((set) => ({
           ? { ...room, furniture: (room.furniture ?? []).filter((f) => f.id !== furnitureId) }
           : room
       ),
+      selectedFurnitureId: state.selectedFurnitureId === furnitureId ? null : state.selectedFurnitureId,
     })),
 }))
 

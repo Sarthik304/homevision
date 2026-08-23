@@ -13,6 +13,7 @@ import {
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
 import { formatLength } from '../../utils/units'
+import { resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
@@ -27,6 +28,8 @@ const ROTATE_HANDLE_RADIUS = 6 // px
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
+const FURNITURE_CORNERS = ['tl', 'tr', 'bl', 'br']
+const FURNITURE_CORNER_CURSORS = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' }
 
 // cuts door gaps out of a wall, returns remaining [start, end] solid stretches
 function solidWallStretches(lengthPx, doors) {
@@ -322,11 +325,23 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
   })
 }
 
-// dummy furniture: a draggable box per item, clamped to the room's own footprint
-function RoomFurniture({ room, color, updateFurniture }) {
+// dummy furniture: a draggable + corner-resizable box per item, clamped to the room's own footprint
+function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurniture, onResizeMove, onResizeEnd }) {
   const items = room.furniture ?? []
 
   return items.map((item) => {
+    const isSelected = item.id === selectedFurnitureId
+    const pixelX = item.x * SCALE
+    const pixelY = item.y * SCALE
+    const pixelW = item.width * SCALE
+    const pixelD = item.depth * SCALE
+    const corners = {
+      tl: [pixelX, pixelY],
+      tr: [pixelX + pixelW, pixelY],
+      bl: [pixelX, pixelY + pixelD],
+      br: [pixelX + pixelW, pixelY + pixelD],
+    }
+
     const clampToRoom = (e) => {
       const rawX = e.target.x() / SCALE
       const rawY = e.target.y() / SCALE
@@ -340,16 +355,20 @@ function RoomFurniture({ room, color, updateFurniture }) {
     return (
       <Group key={item.id}>
         <Rect
-          x={item.x * SCALE}
-          y={item.y * SCALE}
-          width={item.width * SCALE}
-          height={item.depth * SCALE}
+          x={pixelX}
+          y={pixelY}
+          width={pixelW}
+          height={pixelD}
           fill={item.color}
           opacity={0.85}
-          stroke={color.text}
-          strokeWidth={1}
+          stroke={isSelected ? color.brand : color.text}
+          strokeWidth={isSelected ? 2 : 1}
           cornerRadius={3}
           draggable
+          onClick={(e) => {
+            e.cancelBubble = true
+            onSelect(item.id)
+          }}
           onDragMove={clampToRoom}
           onDragEnd={(e) => {
             const { x, y } = clampToRoom(e)
@@ -364,15 +383,43 @@ function RoomFurniture({ room, color, updateFurniture }) {
         />
         <Text
           text={item.label}
-          x={item.x * SCALE}
-          y={item.y * SCALE + (item.depth * SCALE) / 2 - 6}
-          width={item.width * SCALE}
+          x={pixelX}
+          y={pixelY + pixelD / 2 - 6}
+          width={pixelW}
           align="center"
           fontSize={10}
           fill={color.text}
           fontFamily={font}
           listening={false}
         />
+
+        {isSelected &&
+          FURNITURE_CORNERS.map((corner) => {
+            const [hx, hy] = corners[corner]
+            return (
+              <Rect
+                key={corner}
+                x={hx - HANDLE_SIZE / 2}
+                y={hy - HANDLE_SIZE / 2}
+                width={HANDLE_SIZE}
+                height={HANDLE_SIZE}
+                fill={color.bg}
+                stroke={color.brand}
+                strokeWidth={1.5}
+                cornerRadius={2}
+                draggable
+                hitStrokeWidth={16}
+                onDragMove={(e) => onResizeMove(e, room.id, item.id, corner)}
+                onDragEnd={(e) => onResizeEnd(e, room.id, item.id, corner)}
+                onMouseEnter={(e) => {
+                  e.target.getStage().container().style.cursor = FURNITURE_CORNER_CURSORS[corner]
+                }}
+                onMouseLeave={(e) => {
+                  e.target.getStage().container().style.cursor = 'default'
+                }}
+              />
+            )
+          })}
       </Group>
     )
   })
@@ -449,6 +496,8 @@ const selectFloorPlanState = (s) => ({
   selectedInteriorWallId: s.selectedInteriorWallId,
   selectInteriorWall: s.selectInteriorWall,
   updateInteriorWall: s.updateInteriorWall,
+  selectedFurnitureId: s.selectedFurnitureId,
+  selectFurniture: s.selectFurniture,
   updateFurniture: s.updateFurniture,
   darkMode: s.darkMode,
   unit: s.unit,
@@ -468,6 +517,8 @@ export default function FloorPlanEditor() {
     selectedInteriorWallId,
     selectInteriorWall,
     updateInteriorWall,
+    selectedFurnitureId,
+    selectFurniture,
     updateFurniture,
     darkMode,
     unit,
@@ -785,6 +836,44 @@ export default function FloorPlanEditor() {
     })
   }
 
+  // resizes a furniture item by dragging one of its corners, keeping the opposite corner fixed
+  function resizeFurnitureForCorner(e, roomId, furnitureId, corner) {
+    const room = rooms.find((r) => r.id === roomId)
+    const item = room?.furniture?.find((f) => f.id === furnitureId)
+    if (!room || !item) return null
+
+    const pointerX = (e.target.x() + HANDLE_SIZE / 2) / SCALE
+    const pointerY = (e.target.y() + HANDLE_SIZE / 2) / SCALE
+    const rect = resizeFurnitureCorner(item, corner, pointerX, pointerY, room.width, room.height)
+
+    const cornerPixel = {
+      tl: [rect.x, rect.y],
+      tr: [rect.x + rect.width, rect.y],
+      bl: [rect.x, rect.y + rect.depth],
+      br: [rect.x + rect.width, rect.y + rect.depth],
+    }[corner]
+    e.target.x(cornerPixel[0] * SCALE - HANDLE_SIZE / 2)
+    e.target.y(cornerPixel[1] * SCALE - HANDLE_SIZE / 2)
+
+    return rect
+  }
+
+  function handleFurnitureResizeMove(e, roomId, furnitureId, corner) {
+    const rect = resizeFurnitureForCorner(e, roomId, furnitureId, corner)
+    if (rect) updateFurniture(roomId, furnitureId, rect)
+  }
+
+  function handleFurnitureResizeEnd(e, roomId, furnitureId, corner) {
+    const rect = resizeFurnitureForCorner(e, roomId, furnitureId, corner)
+    if (!rect) return
+    updateFurniture(roomId, furnitureId, {
+      x: Math.round(rect.x * 10) / 10,
+      y: Math.round(rect.y * 10) / 10,
+      width: Math.round(rect.width * 10) / 10,
+      depth: Math.round(rect.depth * 10) / 10,
+    })
+  }
+
   // angle of the drag handle around the room's center, snapped to the nearest 45°
   function computeRoomRotation(e, roomId) {
     const room = rooms.find((r) => r.id === roomId)
@@ -1043,7 +1132,15 @@ export default function FloorPlanEditor() {
                   onEndpointEnd={handleInteriorWallEndpointEnd}
                 />
 
-                <RoomFurniture room={room} color={color} updateFurniture={updateFurniture} />
+                <RoomFurniture
+                  room={room}
+                  color={color}
+                  selectedFurnitureId={selectedFurnitureId}
+                  onSelect={selectFurniture}
+                  updateFurniture={updateFurniture}
+                  onResizeMove={handleFurnitureResizeMove}
+                  onResizeEnd={handleFurnitureResizeEnd}
+                />
 
                 <Text
                   text={room.name}
