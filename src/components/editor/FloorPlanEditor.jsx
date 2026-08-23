@@ -33,8 +33,7 @@ const FURNITURE_CORNERS = ['tl', 'tr', 'bl', 'br']
 const FURNITURE_CORNER_CURSORS = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' }
 const DIMENSION_POPUP_WIDTH = 180
 const DIMENSION_POPUP_HEIGHT = 190
-// manual double-click detection (Konva's built-in dblclick is unreliable on draggable shapes,
-// same reasoning as Room3D.jsx's WallWithOpenings)
+// manual double-click detection (Konva's dblclick is unreliable on draggable shapes)
 const DOUBLE_CLICK_MS = 350
 
 // cuts door gaps out of a wall, returns remaining [start, end] solid stretches
@@ -711,8 +710,7 @@ export default function FloorPlanEditor() {
     setDimensionPopup(null)
   }
 
-  // selects the clicked furniture item; two clicks on the same item within DOUBLE_CLICK_MS
-  // open the dimensions popup instead (see DOUBLE_CLICK_MS for why this isn't Konva's onDblClick)
+  // selects furniture; two clicks on the same item within DOUBLE_CLICK_MS open the dimensions popup
   function handleFurnitureClick(roomId, furnitureId, nativeEvent) {
     selectFurniture(furnitureId)
 
@@ -808,8 +806,7 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // like resizeRoomForEdge for an L-shaped room's 6 edges: outer edges resize the bounding box,
-  // notchV/notchH resize the notch (each clamped so the L never inverts)
+  // like resizeRoomForEdge for an L-shaped room's 6 edges: outer edges resize the bounding box, notchV/notchH resize the notch
   function resizeLRoomForEdge(e, roomId, edge) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null

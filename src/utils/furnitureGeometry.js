@@ -2,8 +2,7 @@
 
 export const MIN_FURNITURE_SIZE = 0.2 // meters, smallest a furniture item can be resized to
 
-// resizes item's footprint by dragging `corner` ('tl'/'tr'/'bl'/'br') to (pointerX, pointerY),
-// keeping the opposite corner fixed and clamping to the room and the minimum size
+// resizes item's footprint by dragging one corner, keeping the opposite corner fixed
 export function resizeFurnitureCorner(item, corner, pointerX, pointerY, roomWidth, roomHeight) {
   const left = item.x
   const top = item.y

@@ -6,8 +6,7 @@ import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import { getColors, radius } from '../../theme'
 
-// Shown when the current view was loaded from someone else's shareable link. Lets the visitor
-// save their own independent copy — the original is never touched by them.
+// Shown when viewing a design loaded from someone else's shareable link; lets the visitor save their own copy
 export default function SharedDesignBanner() {
   const darkMode = useHouseStore((s) => s.darkMode)
   const color = getColors(darkMode)

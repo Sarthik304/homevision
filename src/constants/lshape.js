@@ -1,5 +1,4 @@
-// Geometry for L-shaped rooms: a rectangle with a notch removed from its top-right corner
-// (only orientation supported). Values are in meters, local to the room's (0,0) top-left origin.
+// Geometry for L-shaped rooms: a rectangle with a notch removed from its top-right corner (only orientation supported)
 
 export const RECT_WALL_KEYS = ['top', 'bottom', 'left', 'right']
 export const L_WALL_KEYS = ['top', 'notchV', 'notchH', 'right', 'bottom', 'left']
