@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import Room3D from './Room3D'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
+import { eventClientXY } from '../../utils/pointerPosition'
 
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
@@ -73,8 +74,9 @@ export default function HouseViewer() {
   const handleWallDoubleClick = (roomId, kind, key, nativeEvent) => {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
-    const rawX = nativeEvent.clientX - rect.left
-    const rawY = nativeEvent.clientY - rect.top
+    const { clientX, clientY } = eventClientXY(nativeEvent)
+    const rawX = clientX - rect.left
+    const rawY = clientY - rect.top
     setColorPicker({
       roomId,
       kind,

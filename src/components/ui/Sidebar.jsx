@@ -8,6 +8,7 @@ import { getWallKeys, MIN_NOTCH } from '../../constants/lshape'
 import { FURNITURE_PRESETS } from '../../constants/furniture'
 import { formatLength } from '../../utils/units'
 import DimensionInput from './DimensionInput'
+import useIsMobile from '../../hooks/useIsMobile'
 
 const getSectionHeader = (color) => ({
   fontSize: 11,
@@ -536,6 +537,13 @@ export default function Sidebar() {
   const [doorWallChoice, setDoorWallChoice] = useState('top')
   const [windowWallChoice, setWindowWallChoice] = useState('top')
   const [newRoomShape, setNewRoomShape] = useState('rect')
+  const isMobile = useIsMobile()
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // opens the drawer automatically when a room gets selected on the canvas
+  useEffect(() => {
+    if (isMobile && selectedRoomId) setMobileOpen(true)
+  }, [isMobile, selectedRoomId])
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
   const availableWalls = selectedRoom ? getWallKeys(selectedRoom).filter((key) => selectedRoom.walls[key]) : []
@@ -550,13 +558,58 @@ export default function Sidebar() {
     if (selectedInteriorWallId) setColorTarget(`interior:${selectedInteriorWallId}`)
   }, [selectedInteriorWallId])
 
+  if (isMobile && !mobileOpen) {
+    return (
+      <button
+        className="pixel-btn"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open room properties"
+        style={{
+          position: 'fixed',
+          right: 16,
+          bottom: 16,
+          width: 48,
+          height: 48,
+          borderRadius: '50%',
+          border: `1.5px solid ${color.text}`,
+          background: color.brand,
+          color: '#fff',
+          fontSize: 20,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+          zIndex: 30,
+        }}
+      >
+        ⚙
+      </button>
+    )
+  }
+
   return (
-    <div
+    <>
+      {isMobile && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 30 }}
+        />
+      )}
+      <div
       style={{
-        width: 280,
-        height: '100%',
+        width: isMobile ? '100%' : 280,
+        height: isMobile ? 'min(75vh, 560px)' : '100%',
+        maxHeight: isMobile ? '75vh' : undefined,
+        position: isMobile ? 'fixed' : 'static',
+        left: isMobile ? 0 : undefined,
+        right: isMobile ? 0 : undefined,
+        bottom: isMobile ? 0 : undefined,
+        borderRadius: isMobile ? '16px 16px 0 0' : 0,
+        zIndex: isMobile ? 31 : undefined,
         background: color.bg,
-        borderLeft: `1px solid ${color.border}`,
+        borderLeft: isMobile ? 'none' : `1px solid ${color.border}`,
+        borderTop: isMobile ? `1px solid ${color.border}` : 'none',
         color: color.text,
         display: 'flex',
         flexDirection: 'column',
@@ -566,6 +619,15 @@ export default function Sidebar() {
         boxSizing: 'border-box',
       }}
     >
+      {isMobile && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{ display: 'flex', justifyContent: 'center', margin: '-8px 0 -4px', cursor: 'pointer' }}
+        >
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: color.border }} />
+        </div>
+      )}
+
       <div>
         <div style={{ ...sectionHeader, marginBottom: 10 }}>Rooms</div>
 
@@ -929,6 +991,7 @@ export default function Sidebar() {
           Click a room to edit it
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

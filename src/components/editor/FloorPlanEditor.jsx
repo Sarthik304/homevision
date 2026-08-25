@@ -14,7 +14,9 @@ import {
 } from '../../utils/interiorWallGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
+import { eventClientXY } from '../../utils/pointerPosition'
 import DimensionInput from '../ui/DimensionInput'
+import useIsMobile from '../../hooks/useIsMobile'
 
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
@@ -540,6 +542,13 @@ export default function FloorPlanEditor() {
   const groupDragRef = useRef(null) // group-drag start snapshot (see handleGroupDragMove)
   const wallBodyDragRef = useRef(null) // interior wall drag start snapshot (see startInteriorWallBodyDrag)
   const furnitureClickRef = useRef({ id: null, time: 0 }) // last furniture click, for double-click detection
+  const pinchRef = useRef(null) // two-finger pinch-zoom start snapshot (see the touchmove listener below)
+  const stageRef = useRef(null)
+  const stageScaleRef = useRef(stageScale) // mirrors state for the native touch listeners' stable closures
+  const stagePosRef = useRef(stagePos)
+  stageScaleRef.current = stageScale
+  stagePosRef.current = stagePos
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -729,8 +738,9 @@ export default function FloorPlanEditor() {
   function openDimensionPopup(roomId, furnitureId, nativeEvent) {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
-    const rawX = nativeEvent.clientX - rect.left
-    const rawY = nativeEvent.clientY - rect.top
+    const { clientX, clientY } = eventClientXY(nativeEvent)
+    const rawX = clientX - rect.left
+    const rawY = clientY - rect.top
     setDimensionPopup({
       roomId,
       furnitureId,
@@ -1065,6 +1075,69 @@ export default function FloorPlanEditor() {
     })
   }
 
+  // two-finger pinch to zoom/pan. Konva suppresses all its own pointer-event dispatch while
+  // Konva.isDragging() is true (a single-finger touch starts dragging the Stage before a second
+  // finger lands), which silently swallows a Stage onTouchMove prop — so this binds capture-phase
+  // native listeners on the container, ahead of Konva's own bubble-phase listeners on the canvas,
+  // and stops propagation for any 2-finger event so Konva never sees (or drags on) multi-touch.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    function onTouchStart(e) {
+      if (e.touches.length < 2) return
+      e.stopPropagation()
+      const stage = stageRef.current
+      if (stage?.isDragging()) stage.stopDrag()
+    }
+
+    function onTouchMove(e) {
+      if (e.touches.length < 2) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      const rect = el.getBoundingClientRect()
+      const [touch1, touch2] = e.touches
+      const p1 = { x: touch1.clientX - rect.left, y: touch1.clientY - rect.top }
+      const p2 = { x: touch2.clientX - rect.left, y: touch2.clientY - rect.top }
+      const center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+
+      const last = pinchRef.current
+      if (!last) {
+        pinchRef.current = { center, dist }
+        return
+      }
+
+      const oldScale = stageScaleRef.current
+      const oldPos = stagePosRef.current
+      const focus = { x: (center.x - oldPos.x) / oldScale, y: (center.y - oldPos.y) / oldScale }
+      const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldScale * (dist / last.dist)))
+
+      setStageScale(newScale)
+      setStagePos({
+        x: center.x - focus.x * newScale + (center.x - last.center.x),
+        y: center.y - focus.y * newScale + (center.y - last.center.y),
+      })
+      pinchRef.current = { center, dist }
+    }
+
+    function onTouchEnd(e) {
+      if (e.touches.length < 2) pinchRef.current = null
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { capture: true })
+    el.addEventListener('touchmove', onTouchMove, { capture: true, passive: false })
+    el.addEventListener('touchend', onTouchEnd, { capture: true })
+    el.addEventListener('touchcancel', onTouchEnd, { capture: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart, { capture: true })
+      el.removeEventListener('touchmove', onTouchMove, { capture: true })
+      el.removeEventListener('touchend', onTouchEnd, { capture: true })
+      el.removeEventListener('touchcancel', onTouchEnd, { capture: true })
+    }
+  }, [])
+
   function resetView() {
     setStageScale(1)
     setStagePos({ x: 0, y: 0 })
@@ -1082,9 +1155,11 @@ export default function FloorPlanEditor() {
         background: color.workspace,
         overflow: 'hidden',
         position: 'relative',
+        touchAction: 'none', // let Konva own pinch/pan on the canvas instead of the browser
       }}
     >
       <Stage
+        ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
         scaleX={stageScale}
@@ -1483,11 +1558,15 @@ export default function FloorPlanEditor() {
           bottom: 12,
           left: '50%',
           transform: 'translateX(-50%)',
+          maxWidth: 'calc(100% - 24px)',
+          textAlign: 'center',
           fontSize: 12,
           color: color.muted,
         }}
       >
-        Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it
+        {isMobile
+          ? 'Pinch to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it'
+          : 'Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it'}
       </div>
     </div>
   )

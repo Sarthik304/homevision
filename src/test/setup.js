@@ -5,6 +5,17 @@ import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
+// jsdom has no layout engine, so it never matches a real media query — stub it to "no match"
+// (desktop-sized) so components using matchMedia (e.g. useIsMobile) don't crash in tests
+if (typeof window !== 'undefined' && !window.matchMedia) {
+  window.matchMedia = (query) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })
+}
+
 afterEach(() => {
   cleanup()
 })
