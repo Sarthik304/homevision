@@ -165,12 +165,12 @@ const useHouseStore = create((set) => ({
   selectedFurnitureId: null,
   activeView: '2d',
   darkMode: false,
-  unit: 'm', // display unit only ('m'/'ft') — geometry is always stored in meters
+  unit: 'm', // display unit only, see utils/units.js UNIT_OPTIONS — geometry is always stored in meters
   viewCenter: { x: 11, y: 5 }, // 2D viewport center; new rooms/floors spawn here
 
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
 
-  toggleUnit: () => set((state) => ({ unit: state.unit === 'm' ? 'ft' : 'm' })),
+  setUnit: (unit) => set({ unit }),
 
   setViewCenter: (x, y) => set({ viewCenter: { x, y } }),
 

@@ -8,6 +8,7 @@ import DesignsPanel from '../auth/DesignsPanel'
 import OpenDesignModal from './OpenDesignModal'
 import { getColors, radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
+import { UNIT_OPTIONS } from '../../utils/units'
 import useIsMobile from '../../hooks/useIsMobile'
 
 const secondaryBtnStyle = (color) => ({
@@ -22,14 +23,14 @@ const secondaryBtnStyle = (color) => ({
 })
 
 export default function Navbar() {
-  const { activeView, setActiveView, darkMode, toggleDarkMode, unit, toggleUnit } = useHouseStore(
+  const { activeView, setActiveView, darkMode, toggleDarkMode, unit, setUnit } = useHouseStore(
     useShallow((s) => ({
       activeView: s.activeView,
       setActiveView: s.setActiveView,
       darkMode: s.darkMode,
       toggleDarkMode: s.toggleDarkMode,
       unit: s.unit,
-      toggleUnit: s.toggleUnit,
+      setUnit: s.setUnit,
     }))
   )
   const { user, initializing, signOut } = useAuthStore(
@@ -42,6 +43,7 @@ export default function Navbar() {
   const [modal, setModal] = useState(null) // null | 'auth' | 'designs' | 'open-design'
   const isMobile = useIsMobile()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [unitMenuOpen, setUnitMenuOpen] = useState(false)
   const secondaryBtn = secondaryBtnStyle(color)
 
   // fetches designs so "Open share link" knows the active design's public status after sign-in
@@ -54,6 +56,11 @@ export default function Navbar() {
     if (!isMobile) setMenuOpen(false)
   }, [isMobile])
 
+  // close the unit dropdown when the overflow menu it may be nested in closes
+  useEffect(() => {
+    if (isMobile && !menuOpen) setUnitMenuOpen(false)
+  }, [isMobile, menuOpen])
+
   const activeDesignIsPublic = designs.find((d) => d.id === activeDesignId)?.is_public ?? false
 
   const openModalFromMenu = (name) => {
@@ -63,9 +70,68 @@ export default function Navbar() {
 
   const secondaryControls = (
     <>
-      <button className="pixel-btn" onClick={toggleUnit} title="Toggle measurement unit" style={secondaryBtn}>
-        {unit === 'ft' ? 'Feet' : 'Meters'}
-      </button>
+      <div style={{ position: 'relative' }}>
+        <button
+          className="pixel-btn"
+          onClick={() => setUnitMenuOpen((o) => !o)}
+          title="Choose measurement unit"
+          aria-haspopup="true"
+          aria-expanded={unitMenuOpen}
+          style={secondaryBtn}
+        >
+          SI Unit
+        </button>
+
+        {unitMenuOpen && (
+          <div
+            className="pixel-shadow"
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              marginTop: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              background: color.bg,
+              border: `1.5px solid ${color.text}`,
+              '--pixel-shadow-color': color.text,
+              borderRadius: radius.md,
+              padding: 6,
+              minWidth: 150,
+              zIndex: 50,
+            }}
+          >
+            {UNIT_OPTIONS.map((opt) => {
+              const active = opt.key === unit
+              return (
+                <button
+                  key={opt.key}
+                  className="pixel-btn"
+                  onClick={() => {
+                    setUnit(opt.key)
+                    setUnitMenuOpen(false)
+                  }}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: radius.sm,
+                    border: 'none',
+                    background: active ? color.brandTint : 'transparent',
+                    color: active ? color.brand : color.text,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: active ? 700 : 500,
+                    textAlign: 'left',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {opt.label} ({opt.key})
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       <button className="pixel-btn" onClick={toggleDarkMode} title="Toggle dark mode" style={secondaryBtn}>
         {darkMode ? 'Light mode' : 'Dark mode'}

@@ -126,7 +126,7 @@ describe('unit toggle', () => {
 
   it('switching to feet relabels the width field and shows the converted value', () => {
     render(<Sidebar />)
-    act(() => useHouseStore.getState().toggleUnit())
+    act(() => useHouseStore.getState().setUnit('ft'))
 
     expect(screen.getByText('Width (ft)')).toBeInTheDocument()
     // Living Room is 12m wide -> 12 / 0.3048 = 39.3700... -> rounded to 2 decimals for feet
@@ -135,7 +135,7 @@ describe('unit toggle', () => {
 
   it('typing a feet value stores the equivalent in meters', () => {
     render(<Sidebar />)
-    act(() => useHouseStore.getState().toggleUnit())
+    act(() => useHouseStore.getState().setUnit('ft'))
 
     fireEvent.change(screen.getByDisplayValue(39.37), { target: { value: '10' } })
 

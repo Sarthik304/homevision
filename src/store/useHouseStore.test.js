@@ -16,13 +16,13 @@ function getRoom(id) {
   return useHouseStore.getState().rooms.find((r) => r.id === id)
 }
 
-describe('toggleUnit', () => {
-  it('toggles between meters and feet, defaulting to meters', () => {
+describe('setUnit', () => {
+  it('sets the display unit, defaulting to meters', () => {
     expect(useHouseStore.getState().unit).toBe('m')
-    useHouseStore.getState().toggleUnit()
+    useHouseStore.getState().setUnit('ft')
     expect(useHouseStore.getState().unit).toBe('ft')
-    useHouseStore.getState().toggleUnit()
-    expect(useHouseStore.getState().unit).toBe('m')
+    useHouseStore.getState().setUnit('cm')
+    expect(useHouseStore.getState().unit).toBe('cm')
   })
 })
 
