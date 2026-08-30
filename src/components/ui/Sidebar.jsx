@@ -842,8 +842,9 @@ export default function Sidebar() {
                 Reset to rectangle
               </button>
               <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
-                Drag a corner in the 2D view to reshape this room — it snaps to an edge's midpoint
-                or the center, handy for a rhombus, kite, trapezoid, or parallelogram.
+                Drag a corner in the 2D view to reshape this room — inward for a rhombus, kite,
+                trapezoid, or parallelogram, or pull it outward past the box for a dart or arrow
+                point. It snaps to an edge's midpoint or the center along the way.
               </div>
             </div>
           )}

@@ -13,7 +13,7 @@ import {
   computeWallEndpointMove,
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
-import { clampAndSnapQuadCorner } from '../../utils/quadGeometry'
+import { snapQuadCorner } from '../../utils/quadGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 import { eventClientXY } from '../../utils/pointerPosition'
@@ -1017,8 +1017,9 @@ export default function FloorPlanEditor() {
 
   // given a point in world-pixel space (meters*SCALE+PADDING, matching pixelX/centerX elsewhere),
   // returns the corresponding local-space point (meters, relative to the room's own x/y) for one
-  // of a quad room's corners, clamped to the room's bounding box and snapped to its corners/
-  // edge-midpoints/center — the snap is what makes it easy to land exactly on a rhombus or kite
+  // of a quad room's corners, unbounded — a corner can be dragged inside the box (distorting the
+  // shape) or out past it (stretching a point outward) — snapped to the box's corners/
+  // edge-midpoints/center when close, which is what makes it easy to land exactly on a rhombus
   function computeQuadCornerPoint(point, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -1030,7 +1031,7 @@ export default function FloorPlanEditor() {
     const pointerX = (local.x - PADDING) / SCALE - room.x
     const pointerY = (local.y - PADDING) / SCALE - room.y
 
-    return clampAndSnapQuadCorner(room.width, room.height, pointerX, pointerY)
+    return snapQuadCorner(room.width, room.height, pointerX, pointerY)
   }
 
   // Quad corner-dragging is driven by plain mousedown/touchstart + window-level move/up listeners
