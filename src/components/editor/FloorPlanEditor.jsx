@@ -13,7 +13,7 @@ import {
   computeWallEndpointMove,
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
-import { snapQuadCorner } from '../../utils/quadGeometry'
+import { snapQuadCorner, snapToOtherRooms } from '../../utils/quadGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 import { eventClientXY } from '../../utils/pointerPosition'
@@ -1018,8 +1018,10 @@ export default function FloorPlanEditor() {
   // given a point in world-pixel space (meters*SCALE+PADDING, matching pixelX/centerX elsewhere),
   // returns the corresponding local-space point (meters, relative to the room's own x/y) for one
   // of a quad room's corners, unbounded — a corner can be dragged inside the box (distorting the
-  // shape) or out past it (stretching a point outward) — snapped to the box's corners/
-  // edge-midpoints/center when close, which is what makes it easy to land exactly on a rhombus
+  // shape) or out past it (stretching a point outward). Snaps to whichever is actually closer to
+  // the raw drag position: another room's corner/side (checked first, in world-meters space, so
+  // it works regardless of the dragged room's own rotation), or this room's own box corners/
+  // edge-midpoints/center — the latter is what makes it easy to land exactly on a rhombus or kite.
   function computeQuadCornerPoint(point, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -1031,7 +1033,29 @@ export default function FloorPlanEditor() {
     const pointerX = (local.x - PADDING) / SCALE - room.x
     const pointerY = (local.y - PADDING) / SCALE - room.y
 
-    return snapQuadCorner(room.width, room.height, pointerX, pointerY)
+    const worldCenterX = room.x + room.width / 2
+    const worldCenterY = room.y + room.height / 2
+    const rawWorldX = room.x + pointerX
+    const rawWorldY = room.y + pointerY
+    const rawWorld = rotation
+      ? rotateAround(rawWorldX, rawWorldY, worldCenterX, worldCenterY, rotation)
+      : { x: rawWorldX, y: rawWorldY }
+    const roomSnap = snapToOtherRooms(rooms, roomId, rawWorld)
+    const ownSnap = snapQuadCorner(room.width, room.height, pointerX, pointerY)
+
+    const roomSnapToLocal = (p) => {
+      const unrotated = rotation ? rotateAround(p.x, p.y, worldCenterX, worldCenterY, -rotation) : p
+      return { x: unrotated.x - room.x, y: unrotated.y - room.y }
+    }
+
+    if (roomSnap && ownSnap) {
+      const roomDist = Math.hypot(rawWorld.x - roomSnap.x, rawWorld.y - roomSnap.y)
+      const ownDist = Math.hypot(pointerX - ownSnap.x, pointerY - ownSnap.y)
+      return ownDist <= roomDist ? ownSnap : roomSnapToLocal(roomSnap)
+    }
+    if (ownSnap) return ownSnap
+    if (roomSnap) return roomSnapToLocal(roomSnap)
+    return { x: pointerX, y: pointerY }
   }
 
   // Quad corner-dragging is driven by plain mousedown/touchstart + window-level move/up listeners

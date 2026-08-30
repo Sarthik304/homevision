@@ -1,13 +1,15 @@
 // Pure geometry for dragging one corner of a freeform quadrilateral room (framework-free).
+import { getLPolygon } from '../constants/lshape'
+import { getQuadPolygon, quadCornersOf } from '../constants/quad'
+import { rotateAround } from './roomGeometry'
 
-// meters, distance within which a dragged corner snaps to a box corner/edge-midpoint/center —
-// makes it easy to land exactly on a rhombus, kite, or trapezoid instead of eyeballing it
+// meters, distance within which a dragged corner snaps to a box corner/edge-midpoint/center, or
+// to another room's corner/side — makes it easy to land exactly on a rhombus, kite, or trapezoid,
+// or to butt a point up against a neighboring room, instead of eyeballing it
 export const QUAD_SNAP_THRESHOLD = 0.35
 
-// snaps a dragged corner to the nearest of the box's 4 corners, 4 edge-midpoints, or center if
-// it's close enough — otherwise leaves it exactly where it was dragged, including outside the
-// box entirely (stretching a corner outward into a dart/star/arrow point, not just distorting
-// the shape inward)
+// snaps a dragged corner (in the room's own local space) to the nearest of the box's 4 corners,
+// 4 edge-midpoints, or center — null if nothing is close enough
 export function snapQuadCorner(width, height, rawX, rawY) {
   const candidates = [
     { x: 0, y: 0 },
@@ -21,7 +23,7 @@ export function snapQuadCorner(width, height, rawX, rawY) {
     { x: width, y: height },
   ]
 
-  let best = { x: rawX, y: rawY }
+  let best = null
   let bestDist = QUAD_SNAP_THRESHOLD
   candidates.forEach((c) => {
     const dist = Math.hypot(rawX - c.x, rawY - c.y)
@@ -29,6 +31,63 @@ export function snapQuadCorner(width, height, rawX, rawY) {
       bestDist = dist
       best = c
     }
+  })
+  return best
+}
+
+// world-space outline of any room — rect, L-shaped, or a freeform quad — accounting for its own
+// rotation, so a dragged corner can snap against a neighbor regardless of that neighbor's shape
+export function getRoomWorldPolygon(room) {
+  const localPoints =
+    room.shape === 'L'
+      ? getLPolygon(room.width, room.height, room.notchWidth, room.notchHeight)
+      : room.shape === 'quad'
+        ? getQuadPolygon(quadCornersOf(room))
+        : [
+            { x: 0, y: 0 },
+            { x: room.width, y: 0 },
+            { x: room.width, y: room.height },
+            { x: 0, y: room.height },
+          ]
+
+  const rotation = room.rotation ?? 0
+  const centerX = room.x + room.width / 2
+  const centerY = room.y + room.height / 2
+  return localPoints.map((p) => {
+    const worldX = room.x + p.x
+    const worldY = room.y + p.y
+    return rotation ? rotateAround(worldX, worldY, centerX, centerY, rotation) : { x: worldX, y: worldY }
+  })
+}
+
+// closest point to p on the segment a-b, clamped to the segment (not the infinite line through it)
+function nearestPointOnSegment(p, a, b) {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq < 1e-9) return { x: a.x, y: a.y }
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSq))
+  return { x: a.x + t * dx, y: a.y + t * dy }
+}
+
+// snaps a world-space point to the nearest corner or side of any other room. A corner is just
+// where two sides meet, so checking the nearest point on every side covers both at once — no
+// separate corner candidate list needed. Returns null if nothing is close enough.
+export function snapToOtherRooms(rooms, excludeRoomId, worldPoint) {
+  let best = null
+  let bestDist = QUAD_SNAP_THRESHOLD
+  rooms.forEach((room) => {
+    if (room.id === excludeRoomId) return
+    const polygon = getRoomWorldPolygon(room)
+    polygon.forEach((a, i) => {
+      const b = polygon[(i + 1) % polygon.length]
+      const candidate = nearestPointOnSegment(worldPoint, a, b)
+      const dist = Math.hypot(worldPoint.x - candidate.x, worldPoint.y - candidate.y)
+      if (dist < bestDist) {
+        bestDist = dist
+        best = candidate
+      }
+    })
   })
   return best
 }
