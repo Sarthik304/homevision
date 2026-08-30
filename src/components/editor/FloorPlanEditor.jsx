@@ -5,6 +5,7 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors, font, radius } from '../../theme'
 import { SCALE, PADDING, MIN_ROOM_SIZE } from '../../constants/floorPlan'
 import { getLEdges, getLPolygon, MIN_NOTCH, L_WALL_KEYS, DEFAULT_L_WALLS } from '../../constants/lshape'
+import { QUAD_CORNER_KEYS, getQuadEdges, getQuadPolygon, quadCornersOf } from '../../constants/quad'
 import { rotateAround, getRoomAABB, getSnappedPosition } from '../../utils/roomGeometry'
 import {
   SNAP_ANGLE_THRESHOLD_DEG,
@@ -12,6 +13,7 @@ import {
   computeWallEndpointMove,
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
+import { clampAndSnapQuadCorner } from '../../utils/quadGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 import { eventClientXY } from '../../utils/pointerPosition'
@@ -124,17 +126,15 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
-// same rendering as RoomWalls, generalized to an L-shaped room's 6 edges
-function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color }) {
-  const walls = room.walls ?? DEFAULT_L_WALLS
-  const doors = room.doors ?? []
-  const windows = room.windows ?? []
-  const edges = getLEdges(pixelW, pixelH, pixelNW, pixelNH)
-
+// generalized wall/door/window rendering for any room whose boundary is a list of straight edges
+// (an L-shaped room's 6 edges, or a freeform quad's 4) — everything below is edge-vector math
+// with no assumption the edge is horizontal/vertical, so it works at any angle
+function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
   return edges.filter((edge) => walls[edge.key]).map((edge) => {
     const dx = edge.to.x - edge.from.x
     const dy = edge.to.y - edge.from.y
     const lengthPx = Math.hypot(dx, dy)
+    if (lengthPx < 1) return null
     const ux = dx / lengthPx
     const uy = dy / lengthPx
     const nx = -uy
@@ -196,6 +196,32 @@ function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color 
       </Group>
     )
   })
+}
+
+function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color }) {
+  return (
+    <EdgeWalls
+      edges={getLEdges(pixelW, pixelH, pixelNW, pixelNH)}
+      walls={room.walls ?? DEFAULT_L_WALLS}
+      doors={room.doors ?? []}
+      windows={room.windows ?? []}
+      isSelected={isSelected}
+      color={color}
+    />
+  )
+}
+
+function QuadRoomWalls({ room, pixelCorners, isSelected, color }) {
+  return (
+    <EdgeWalls
+      edges={getQuadEdges(pixelCorners)}
+      walls={room.walls ?? DEFAULT_WALLS}
+      doors={room.doors ?? []}
+      windows={room.windows ?? []}
+      isSelected={isSelected}
+      color={color}
+    />
+  )
 }
 
 // freeform two-endpoint interior partition walls (not tied to a room's boundary edges)
@@ -464,6 +490,37 @@ function lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edgeKey
   return [pixelX + (edge.from.x + edge.to.x) / 2, pixelY + (edge.from.y + edge.to.y) / 2]
 }
 
+// a quad room's corner-drag handle — solid brand-colored, distinct from the hollow square
+// edge-resize handles (resize the box) and hollow circular rotate handle (spin the room).
+// Uses plain mousedown/touchstart (see startQuadCornerDrag) rather than Konva's own
+// draggable/onDragMove, which is what avoided a real reported bug where corner-dragging
+// silently didn't work in real browsers despite behaving correctly under automated testing.
+function QuadCornerHandle({ roomId, cornerKey, x, y, color, onDragStart }) {
+  const start = (e) => {
+    e.cancelBubble = true
+    onDragStart(e.target.getStage(), roomId, cornerKey)
+  }
+  return (
+    <Circle
+      x={x}
+      y={y}
+      radius={INTERIOR_HANDLE_RADIUS + 2}
+      fill={color.brand}
+      stroke={color.bg}
+      strokeWidth={2}
+      hitStrokeWidth={30}
+      onMouseDown={start}
+      onTouchStart={start}
+      onMouseEnter={(e) => {
+        e.target.getStage().container().style.cursor = 'crosshair'
+      }}
+      onMouseLeave={(e) => {
+        e.target.getStage().container().style.cursor = 'default'
+      }}
+    />
+  )
+}
+
 function ZoomButton({ children, onClick, title, color }) {
   return (
     <button
@@ -506,6 +563,7 @@ const selectFloorPlanState = (s) => ({
   selectedFurnitureId: s.selectedFurnitureId,
   selectFurniture: s.selectFurniture,
   updateFurniture: s.updateFurniture,
+  updateQuadCorner: s.updateQuadCorner,
   darkMode: s.darkMode,
   unit: s.unit,
   setViewCenter: s.setViewCenter,
@@ -527,6 +585,7 @@ export default function FloorPlanEditor() {
     selectedFurnitureId,
     selectFurniture,
     updateFurniture,
+    updateQuadCorner,
     darkMode,
     unit,
     setViewCenter,
@@ -956,6 +1015,70 @@ export default function FloorPlanEditor() {
     if (deg != null) updateRoom(roomId, { rotation: Math.round(deg * 10) / 10 })
   }
 
+  // given a point in world-pixel space (meters*SCALE+PADDING, matching pixelX/centerX elsewhere),
+  // returns the corresponding local-space point (meters, relative to the room's own x/y) for one
+  // of a quad room's corners, clamped to the room's bounding box and snapped to its corners/
+  // edge-midpoints/center — the snap is what makes it easy to land exactly on a rhombus or kite
+  function computeQuadCornerPoint(point, roomId) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return null
+
+    const rotation = room.rotation ?? 0
+    const centerX = (room.x + room.width / 2) * SCALE + PADDING
+    const centerY = (room.y + room.height / 2) * SCALE + PADDING
+    const local = rotation ? rotateAround(point.x, point.y, centerX, centerY, -rotation) : point
+    const pointerX = (local.x - PADDING) / SCALE - room.x
+    const pointerY = (local.y - PADDING) / SCALE - room.y
+
+    return clampAndSnapQuadCorner(room.width, room.height, pointerX, pointerY)
+  }
+
+  // Quad corner-dragging is driven by plain mousedown/touchstart + window-level move/up listeners
+  // rather than Konva's own draggable/onDragMove — deliberately bypassing Konva's native drag
+  // machinery (see the pinch-zoom listeners above for this file's other case of doing the same),
+  // since the corner handle only needs to read the pointer position each frame and let React's own
+  // re-render move it, with no dependency on Konva's drag-state internals working a given way.
+  function startQuadCornerDrag(stage, roomId, cornerKey) {
+    const container = containerRef.current
+    if (!container) return
+    stage.container().style.cursor = 'crosshair'
+
+    function pointFromEvent(nativeEvent) {
+      const rect = container.getBoundingClientRect()
+      const { clientX, clientY } = eventClientXY(nativeEvent)
+      return {
+        x: (clientX - rect.left - stagePosRef.current.x) / stageScaleRef.current,
+        y: (clientY - rect.top - stagePosRef.current.y) / stageScaleRef.current,
+      }
+    }
+
+    function handleMove(nativeEvent) {
+      nativeEvent.preventDefault()
+      const snapped = computeQuadCornerPoint(pointFromEvent(nativeEvent), roomId)
+      if (snapped) updateQuadCorner(roomId, cornerKey, snapped)
+    }
+
+    function handleEnd(nativeEvent) {
+      const snapped = computeQuadCornerPoint(pointFromEvent(nativeEvent), roomId)
+      if (snapped) {
+        updateQuadCorner(roomId, cornerKey, {
+          x: Math.round(snapped.x * 10) / 10,
+          y: Math.round(snapped.y * 10) / 10,
+        })
+      }
+      stage.container().style.cursor = 'default'
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleEnd)
+      window.removeEventListener('touchmove', handleMove)
+      window.removeEventListener('touchend', handleEnd)
+    }
+
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleEnd)
+    window.addEventListener('touchmove', handleMove, { passive: false })
+    window.addEventListener('touchend', handleEnd)
+  }
+
   function findInteriorWall(roomId, wallId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -1185,8 +1308,17 @@ export default function FloorPlanEditor() {
             const pixelW = room.width * SCALE
             const pixelH = room.height * SCALE
             const isL = room.shape === 'L'
+            const isQuad = room.shape === 'quad'
             const pixelNW = isL ? room.notchWidth * SCALE : 0
             const pixelNH = isL ? room.notchHeight * SCALE : 0
+            const pixelCorners = isQuad
+              ? Object.fromEntries(
+                  QUAD_CORNER_KEYS.map((key) => {
+                    const c = quadCornersOf(room)[key]
+                    return [key, { x: c.x * SCALE, y: c.y * SCALE }]
+                  })
+                )
+              : null
             const hasAnyWall = Object.values(room.walls ?? DEFAULT_WALLS).some(Boolean)
 
             return (
@@ -1203,9 +1335,12 @@ export default function FloorPlanEditor() {
                 onDragEnd={(e) => handleGroupDragEnd(e, room.id)}
                 onClick={(e) => (e.evt.shiftKey ? toggleRoomSelection(room.id) : selectRoom(room.id))}
               >
-                {isL ? (
+                {isL || isQuad ? (
                   <Line
-                    points={getLPolygon(pixelW, pixelH, pixelNW, pixelNH).flatMap((p) => [p.x, p.y])}
+                    points={(isL
+                      ? getLPolygon(pixelW, pixelH, pixelNW, pixelNH)
+                      : getQuadPolygon(pixelCorners)
+                    ).flatMap((p) => [p.x, p.y])}
                     closed
                     fill={room.floorColor}
                     stroke={isSelected && !hasAnyWall ? color.brand : 'transparent'}
@@ -1233,6 +1368,8 @@ export default function FloorPlanEditor() {
                     isSelected={isSelected}
                     color={color}
                   />
+                ) : isQuad ? (
+                  <QuadRoomWalls room={room} pixelCorners={pixelCorners} isSelected={isSelected} color={color} />
                 ) : (
                   <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
                 )}
@@ -1337,7 +1474,7 @@ export default function FloorPlanEditor() {
                   left: [pixelX, pixelY + pixelH / 2],
                   right: [pixelX + pixelW, pixelY + pixelH / 2],
                 }
-                return WALL_KEYS.map((edge) => {
+                const boxHandles = WALL_KEYS.map((edge) => {
                   const [rawX, rawY] = positions[edge]
                   const { x: hx, y: hy } = rotated(rawX, rawY)
                   return (
@@ -1354,6 +1491,30 @@ export default function FloorPlanEditor() {
                     />
                   )
                 })
+
+                if (room.shape !== 'quad') return boxHandles
+
+                // corner-drag handles let a quad's 4 corners move independently, on top of the
+                // box-resize handles above (which resize the bounding box the corners live in)
+                const corners = quadCornersOf(room)
+                const cornerHandles = QUAD_CORNER_KEYS.map((key) => {
+                  const corner = corners[key]
+                  const rawX = pixelX + corner.x * SCALE
+                  const rawY = pixelY + corner.y * SCALE
+                  const { x: hx, y: hy } = rotated(rawX, rawY)
+                  return (
+                    <QuadCornerHandle
+                      key={`${room.id}-corner-${key}`}
+                      roomId={room.id}
+                      cornerKey={key}
+                      x={hx}
+                      y={hy}
+                      color={color}
+                      onDragStart={startQuadCornerDrag}
+                    />
+                  )
+                })
+                return [...boxHandles, ...cornerHandles]
               })()
 
               const { x: rotateX, y: rotateY } = rotated(centerX, pixelY - ROTATE_HANDLE_DIST)

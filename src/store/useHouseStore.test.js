@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { defaultQuadCorners } from '../constants/quad'
 import useHouseStore from './useHouseStore'
 
 // Living Room (id 1) spans x:[0,12], Bedroom (id 2) spans x:[12,22], both y:[0,10] — flush along
@@ -340,5 +341,61 @@ describe('moveRoomsTo', () => {
     expect(getRoom(LIVING_ROOM_ID).doors[0].offset).toBeCloseTo((3 - 2) / 10)
     expect(getRoom(BEDROOM_ID).doors[0].offset).toBeCloseTo(0.3)
     expect(getRoom(thirdId)).toMatchObject({ x: 12, y: 30 })
+  })
+})
+
+describe('quad room shapes', () => {
+  it('addRoom("quad") spawns a plain rectangle inscribed in its own box', () => {
+    useHouseStore.getState().addRoom('quad')
+    const quad = useHouseStore.getState().rooms.at(-1)
+    expect(quad.shape).toBe('quad')
+    expect(quad.corners).toEqual(defaultQuadCorners(quad.width, quad.height))
+  })
+
+  it('updateQuadCorner moves just the one corner', () => {
+    useHouseStore.getState().addRoom('quad')
+    const quad = useHouseStore.getState().rooms.at(-1)
+
+    useHouseStore.getState().updateQuadCorner(quad.id, 'tl', { x: 2, y: 0 })
+
+    const updated = getRoom(quad.id)
+    expect(updated.corners.tl).toEqual({ x: 2, y: 0 })
+    expect(updated.corners.tr).toEqual(quad.corners.tr) // untouched
+  })
+
+  it('resetQuadShape restores a plain rectangle', () => {
+    useHouseStore.getState().addRoom('quad')
+    const quad = useHouseStore.getState().rooms.at(-1)
+    useHouseStore.getState().updateQuadCorner(quad.id, 'tl', { x: 3, y: 1 })
+
+    useHouseStore.getState().resetQuadShape(quad.id)
+
+    expect(getRoom(quad.id).corners).toEqual(defaultQuadCorners(quad.width, quad.height))
+  })
+
+  it('updateRoom rescales corners proportionally when the bounding box is resized', () => {
+    useHouseStore.getState().addRoom('quad') // spawns at 8x8
+    const quad = useHouseStore.getState().rooms.at(-1)
+    // pull the top-left corner in — a trapezoid narrower at the top
+    useHouseStore.getState().updateQuadCorner(quad.id, 'tl', { x: 2, y: 0 })
+
+    useHouseStore.getState().updateRoom(quad.id, { width: 16, height: 8 }) // double the width
+
+    expect(getRoom(quad.id).corners.tl).toEqual({ x: 4, y: 0 }) // 2 scaled by 16/8
+  })
+
+  it('does not mirror a door into an adjacent room across a quad room wall (unlike a plain rect)', () => {
+    // Living Room already sits flush against Bedroom on 'right' — reshape it into a quad
+    // without moving its box, so the two stay adjacent in bounding-box terms
+    useHouseStore.setState({
+      rooms: useHouseStore.getState().rooms.map((r) =>
+        r.id === LIVING_ROOM_ID ? { ...r, shape: 'quad', corners: defaultQuadCorners(r.width, r.height) } : r
+      ),
+    })
+
+    useHouseStore.getState().addDoor(LIVING_ROOM_ID, 'right')
+
+    expect(getRoom(LIVING_ROOM_ID).doors).toHaveLength(1)
+    expect(getRoom(BEDROOM_ID).doors).toHaveLength(0)
   })
 })

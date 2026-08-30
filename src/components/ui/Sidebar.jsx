@@ -454,6 +454,7 @@ const selectSidebarState = (s) => ({
   selectedInteriorWallId: s.selectedInteriorWallId,
   updateRoomColor: s.updateRoomColor,
   updateRoom: s.updateRoom,
+  resetQuadShape: s.resetQuadShape,
   updateWallColor: s.updateWallColor,
   addRoom: s.addRoom,
   addFloor: s.addFloor,
@@ -489,6 +490,7 @@ export default function Sidebar() {
     selectedInteriorWallId,
     updateRoomColor,
     updateRoom,
+    resetQuadShape,
     updateWallColor,
     addRoom,
     addFloor,
@@ -681,10 +683,11 @@ export default function Sidebar() {
 
         <div style={{ marginTop: 12 }}>
           <label style={{ ...fieldLabel, marginBottom: 6 }}>Room shape</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
             {[
               { key: 'rect', label: 'Rectangle' },
               { key: 'L', label: 'L shape' },
+              { key: 'quad', label: 'Quad' },
             ].map(({ key, label }) => {
               const active = newRoomShape === key
               return (
@@ -826,6 +829,22 @@ export default function Sidebar() {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {selectedRoom.shape === 'quad' && (
+            <div>
+              <button
+                className="pixel-btn"
+                onClick={() => resetQuadShape(selectedRoom.id)}
+                style={secondaryButton}
+              >
+                Reset to rectangle
+              </button>
+              <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
+                Drag a corner in the 2D view to reshape this room — it snaps to an edge's midpoint
+                or the center, handy for a rhombus, kite, trapezoid, or parallelogram.
+              </div>
             </div>
           )}
 

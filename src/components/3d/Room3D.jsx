@@ -4,7 +4,8 @@ import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
-import { getLWallDefs, getRectWallDefs, WALL_THICKNESS } from '../../utils/wallGeometry'
+import { getQuadPolygon, quadCornersOf } from '../../constants/quad'
+import { getLWallDefs, getQuadWallDefs, getRectWallDefs, WALL_THICKNESS } from '../../utils/wallGeometry'
 
 const WALL_HEIGHT = 3
 const DOOR_HEIGHT = 2.1
@@ -98,9 +99,9 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-// flat L-shaped mesh used for floor/ceiling (`flipY` handles their opposite X rotations)
-function buildLShape(width, height, notchWidth, notchHeight, flipY) {
-  const points = getLPolygon(width, height, notchWidth, notchHeight)
+// flat non-rectangular mesh used for floor/ceiling — any ordered polygon (an L-shape's edges, or
+// a freeform quad's 4 corners) works the same way (`flipY` handles their opposite X rotations)
+function buildPolygonShape(points, width, height, flipY) {
   const shape = new Shape()
   points.forEach(({ x, y }, i) => {
     const sx = x - width / 2
@@ -173,8 +174,10 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
   const isL = room.shape === 'L'
+  const isQuad = room.shape === 'quad'
   const notchWidth = isL ? room.notchWidth : 0
   const notchHeight = isL ? room.notchHeight : 0
+  const corners = isQuad ? quadCornersOf(room) : null
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
   const windows = room.windows ?? []
@@ -183,16 +186,26 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const posX = x + width / 2
   const posZ = y + height / 2
 
+  const polygonPoints = isL
+    ? getLPolygon(width, height, notchWidth, notchHeight)
+    : isQuad
+      ? getQuadPolygon(corners)
+      : null
+
   const floorShape = useMemo(
-    () => (isL ? buildLShape(width, height, notchWidth, notchHeight, true) : null),
-    [isL, width, height, notchWidth, notchHeight]
+    () => (polygonPoints ? buildPolygonShape(polygonPoints, width, height, true) : null),
+    [polygonPoints, width, height]
   )
   const ceilingShape = useMemo(
-    () => (isL ? buildLShape(width, height, notchWidth, notchHeight, false) : null),
-    [isL, width, height, notchWidth, notchHeight]
+    () => (polygonPoints ? buildPolygonShape(polygonPoints, width, height, false) : null),
+    [polygonPoints, width, height]
   )
 
-  const wallDefs = isL ? getLWallDefs(width, height, notchWidth, notchHeight) : getRectWallDefs(width, height)
+  const wallDefs = isL
+    ? getLWallDefs(width, height, notchWidth, notchHeight)
+    : isQuad
+      ? getQuadWallDefs(corners, width, height)
+      : getRectWallDefs(width, height)
 
   return (
     <group position={[posX, 0, posZ]} rotation={[0, -((room.rotation ?? 0) * Math.PI) / 180, 0]}>
@@ -204,13 +217,13 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
           if (!pickMode) onClick(room.id)
         }}
       >
-        {isL ? <shapeGeometry args={[floorShape]} /> : <planeGeometry args={[width, height]} />}
+        {polygonPoints ? <shapeGeometry args={[floorShape]} /> : <planeGeometry args={[width, height]} />}
         <meshStandardMaterial color={floorColor} />
       </mesh>
 
       {anyWalls && (
         <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          {isL ? <shapeGeometry args={[ceilingShape]} /> : <planeGeometry args={[width, height]} />}
+          {polygonPoints ? <shapeGeometry args={[ceilingShape]} /> : <planeGeometry args={[width, height]} />}
           <meshStandardMaterial color={palette.ceiling} />
         </mesh>
       )}

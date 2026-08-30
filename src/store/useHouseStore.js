@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { DEFAULT_L_WALLS } from '../constants/lshape'
+import { defaultQuadCorners, quadCornersOf, rescaleQuadCorners } from '../constants/quad'
 import { nextId } from '../utils/id'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
@@ -16,14 +17,19 @@ function mapWall(rooms, roomId, wallId, fn) {
 const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
 const ADJACENCY_TOLERANCE = 0.05 // meters, max gap to count two boundary walls as flush/shared
 
+// a room with no `shape` at all is a plain rect (the two seed rooms predate the `shape` field)
+function isPlainRect(room) {
+  return (room.shape ?? 'rect') === 'rect'
+}
+
 // finds the neighboring room whose wall sits flush against room's wallKey edge (rect rooms only)
 function findAdjacentWall(rooms, room, wallKey) {
-  if (room.shape === 'L' || room.rotation) return null
+  if (!isPlainRect(room) || room.rotation) return null
   const otherWallKey = WALL_ADJACENCY[wallKey]
   if (!otherWallKey) return null
   const other = rooms.find((r) => {
     if (r.id === room.id) return false
-    if (r.shape === 'L' || r.rotation) return false
+    if (!isPlainRect(r) || r.rotation) return false
     if (!(r.walls ?? DEFAULT_WALLS)[otherWallKey]) return false
     if (wallKey === 'right' || wallKey === 'left') {
       const near = wallKey === 'right' ? room.x + room.width : room.x
@@ -43,11 +49,11 @@ const NEARBY_GAP_TOLERANCE = 0.6 // meters, max gap closed when a wall between r
 
 // finds a nearby (not touching) room across wallKey's gap, to pull flush when that wall is removed
 function findNearbyRoomAcrossGap(rooms, room, wallKey) {
-  if (room.shape === 'L' || room.rotation) return null
+  if (!isPlainRect(room) || room.rotation) return null
   let nearest = null
   let bestGap = NEARBY_GAP_TOLERANCE
   rooms.forEach((r) => {
-    if (r.id === room.id || r.shape === 'L' || r.rotation) return
+    if (r.id === room.id || !isPlainRect(r) || r.rotation) return
     if (wallKey === 'right' || wallKey === 'left') {
       const overlap = Math.min(room.y + room.height, r.y + r.height) - Math.max(room.y, r.y)
       if (overlap <= 0) return
@@ -111,6 +117,7 @@ function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape })
     shape,
     rotation: 0,
     ...(shape === 'L' ? { notchWidth: width / 2, notchHeight: height / 2 } : {}),
+    ...(shape === 'quad' ? { corners: defaultQuadCorners(width, height) } : {}),
     wallColor: '#ffffff',
     floorColor,
     walls,
@@ -283,7 +290,16 @@ const useHouseStore = create((set) => ({
 
   updateRoom: (id, updates) =>
     set((state) => {
-      const rooms = state.rooms.map((room) => (room.id === id ? { ...room, ...updates } : room))
+      const rooms = state.rooms.map((room) => {
+        if (room.id !== id) return room
+        const merged = { ...room, ...updates }
+        // resizing a quad's bounding box carries its skew along proportionally, instead of
+        // leaving the corners where they were (which would drift outside the new box)
+        if (room.shape === 'quad' && ('width' in updates || 'height' in updates)) {
+          merged.corners = rescaleQuadCorners(quadCornersOf(room), room.width, room.height, merged.width, merged.height)
+        }
+        return merged
+      })
       const geometryChanged = ['x', 'y', 'width', 'height', 'notchWidth', 'notchHeight', 'rotation'].some(
         (key) => key in updates
       )
@@ -291,6 +307,23 @@ const useHouseStore = create((set) => ({
       const movedRoom = rooms.find((r) => r.id === id)
       return { rooms: resyncSharedDoors(rooms, movedRoom) }
     }),
+
+  // sets one corner of a quad room, reshaping it into a rhombus/trapezoid/kite/parallelogram/
+  // any irregular quadrilateral — point is {x,y} in the room's local (0..width, 0..height) space
+  updateQuadCorner: (roomId, cornerKey, point) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId ? { ...room, corners: { ...quadCornersOf(room), [cornerKey]: point } } : room
+      ),
+    })),
+
+  // snaps a quad room's corners back to a plain rectangle
+  resetQuadShape: (roomId) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId ? { ...room, corners: defaultQuadCorners(room.width, room.height) } : room
+      ),
+    })),
 
   // batched x/y move for dragging a multi-selected group together
   moveRoomsTo: (positions) =>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getLEdges } from '../constants/lshape'
-import { getLWallDefs, getRectWallDefs, WALL_THICKNESS } from './wallGeometry'
+import { getQuadEdges } from '../constants/quad'
+import { getLWallDefs, getQuadWallDefs, getRectWallDefs, WALL_THICKNESS } from './wallGeometry'
 
 // Same rotation convention getLWallDefs relies on (three.js's RotationY matrix): every wall's
 // rotation here is an exact multiple of 90° (since L-shape edges are always axis-aligned), so
@@ -159,6 +160,64 @@ describe('getRectWallDefs', () => {
       expect(start.y).toBeCloseTo(from.y, 0)
       expect(end.x).toBeCloseTo(to.x, 0)
       expect(end.y).toBeCloseTo(to.y, 0)
+    })
+  })
+})
+
+describe('getQuadWallDefs', () => {
+  const width = 10
+  const height = 8
+  // a trapezoid: top edge shifted right and shortened, so 'left' is a genuinely slanted edge —
+  // unlike every L-shape/rect edge, which is always axis-aligned
+  const corners = { tl: { x: 2, y: 0 }, tr: { x: 10, y: 0 }, br: { x: 10, y: 8 }, bl: { x: 0, y: 8 } }
+
+  it('produces one wall def per quad edge, in the same order', () => {
+    const edges = getQuadEdges(corners)
+    const defs = getQuadWallDefs(corners, width, height)
+    expect(defs.map((d) => d.key)).toEqual(edges.map((e) => e.key))
+  })
+
+  it('leaves every wall untrimmed, unlike the fixed 90°-tuned trims on rect/L walls', () => {
+    const defs = getQuadWallDefs(corners, width, height)
+    defs.forEach((def) => {
+      expect(def.trimStart).toBe(0)
+      expect(def.trimEnd).toBe(0)
+    })
+  })
+
+  it('drops a wall whose two corners have collapsed onto each other instead of producing a zero-length def', () => {
+    const collapsed = { ...corners, tl: corners.tr } // 'top' edge has zero length
+    const defs = getQuadWallDefs(collapsed, width, height)
+    expect(defs.map((d) => d.key)).not.toContain('top')
+  })
+
+  it('every wall meets its neighbor with no gap, including across the slanted edge', () => {
+    const defs = getQuadWallDefs(corners, width, height)
+    const byKey = Object.fromEntries(defs.map((d) => [d.key, d]))
+    const cycle = ['top', 'right', 'bottom', 'left']
+    cycle.forEach((key, i) => {
+      const nextKey = cycle[(i + 1) % cycle.length]
+      expect(boxesTouch(footprintAABB(byKey[key]), footprintAABB(byKey[nextKey]))).toBe(true)
+    })
+  })
+
+  // exercises localToWorld's rotation matrix at a genuinely non-90°-multiple angle (the slanted
+  // 'left' edge) — every L-shape/rect edge above only ever hits exact right angles
+  it('offset 0 lands on edge.from and offset 1 lands on edge.to, for every wall including the slanted one', () => {
+    const edges = getQuadEdges(corners)
+    const defs = getQuadWallDefs(corners, width, height)
+    edges.forEach((edge, i) => {
+      const def = defs[i]
+      const atOffset = (offset) => {
+        const { x, z } = localToWorld(def, offset * def.length - def.length / 2, 0)
+        return { x: x + width / 2, y: z + height / 2 }
+      }
+      const start = atOffset(0)
+      const end = atOffset(1)
+      expect(start.x).toBeCloseTo(edge.from.x, 0)
+      expect(start.y).toBeCloseTo(edge.from.y, 0)
+      expect(end.x).toBeCloseTo(edge.to.x, 0)
+      expect(end.y).toBeCloseTo(edge.to.y, 0)
     })
   })
 })
