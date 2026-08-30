@@ -1,4 +1,6 @@
-// Pure geometry for dragging one corner of a freeform quadrilateral room (framework-free).
+// Pure geometry for dragging one corner of a freeform quadrilateral room, plus a couple of
+// shape-agnostic helpers (world polygon, wall angles) that any room shape can snap against
+// regardless of its own or a neighbor's shape (framework-free).
 import { getLPolygon } from '../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../constants/quad'
 import { rotateAround } from './roomGeometry'
@@ -90,4 +92,22 @@ export function snapToOtherRooms(rooms, excludeRoomId, worldPoint) {
     })
   })
   return best
+}
+
+// every wall's orientation for any room shape, in world space, normalized to [0, 180) degrees
+// (a wall and the same wall run the opposite direction are the same orientation) — a plain rect
+// or L-shaped room always has 2 distinct values (rotation and rotation+90); a freeform quad can
+// have up to 4, since its edges aren't constrained to right angles
+export function getRoomWallAngles(room) {
+  const polygon = getRoomWorldPolygon(room)
+  const angles = []
+  polygon.forEach((a, i) => {
+    const b = polygon[(i + 1) % polygon.length]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    if (Math.hypot(dx, dy) < 1e-6) return
+    const deg = (Math.atan2(dy, dx) * 180) / Math.PI
+    angles.push(((deg % 180) + 180) % 180)
+  })
+  return angles
 }

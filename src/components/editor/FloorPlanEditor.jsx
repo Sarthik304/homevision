@@ -13,7 +13,7 @@ import {
   computeWallEndpointMove,
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
-import { snapQuadCorner, snapToOtherRooms } from '../../utils/quadGeometry'
+import { getRoomWallAngles, snapQuadCorner, snapToOtherRooms } from '../../utils/quadGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 import { eventClientXY } from '../../utils/pointerPosition'
@@ -30,6 +30,7 @@ const INTERIOR_HANDLE_RADIUS = 7 // px, interior wall endpoint handle
 const ROTATE_SNAP_DEG = 45 // degrees per rotation handle "click"
 const ROTATE_HANDLE_DIST = 24 // px above the room's top edge for its rotation handle
 const ROTATE_HANDLE_RADIUS = 6 // px
+const ROTATE_NEIGHBOR_PROXIMITY = 3 // meters, how close a room's bounding box must be to count as a rotation-snap neighbor
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 const WALL_KEYS = ['top', 'bottom', 'left', 'right']
@@ -39,6 +40,16 @@ const DIMENSION_POPUP_WIDTH = 180
 const DIMENSION_POPUP_HEIGHT = 190
 // manual double-click detection (Konva's dblclick is unreliable on draggable shapes)
 const DOUBLE_CLICK_MS = 350
+
+// true if two rooms' bounding boxes are within margin meters of each other (approximate — ignores
+// rotation/actual shape, just enough to gate "is this room roughly nearby" for rotation snapping)
+function roomsAreNear(a, b, margin) {
+  const within1D = (aMin, aMax, bMin, bMax) => aMin - margin <= bMax && bMin - margin <= aMax
+  return (
+    within1D(a.x, a.x + a.width, b.x, b.x + b.width) &&
+    within1D(a.y, a.y + a.height, b.y, b.y + b.height)
+  )
+}
 
 // cuts door gaps out of a wall, returns remaining [start, end] solid stretches
 function solidWallStretches(lengthPx, doors) {
@@ -982,7 +993,11 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // angle of the drag handle around the room's center, snapped to the nearest 45°
+  // angle of the drag handle around the room's center, snapped to the nearest 45° OR to whatever
+  // rotation would make one of this room's own walls parallel to a wall of any nearby room — so
+  // rotating a room next to a skewed quad neighbor can snap flush against its actual wall angle,
+  // not just the 45° grid. Works for every shape combination (rect/L/quad, any shape next to any)
+  // since getRoomWallAngles derives real wall angles from each room's actual polygon.
   function computeRoomRotation(e, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -993,9 +1008,30 @@ export default function FloorPlanEditor() {
     let deg = (angleRad * 180) / Math.PI
     if (deg < 0) deg += 360
 
-    const nearest = Math.round(deg / ROTATE_SNAP_DEG) * ROTATE_SNAP_DEG
-    const diff = Math.min(Math.abs(deg - nearest), 360 - Math.abs(deg - nearest))
-    const finalDeg = (diff <= SNAP_ANGLE_THRESHOLD_DEG ? nearest : deg) % 360
+    const candidates = []
+    for (let a = 0; a < 360; a += ROTATE_SNAP_DEG) candidates.push(a)
+
+    const ownLocalAngles = getRoomWallAngles({ ...room, rotation: 0 })
+    rooms.forEach((other) => {
+      if (other.id === roomId) return
+      if (!roomsAreNear(room, other, ROTATE_NEIGHBOR_PROXIMITY)) return
+      getRoomWallAngles(other).forEach((targetAngle) => {
+        ownLocalAngles.forEach((ownAngle) => {
+          const aligned = ((targetAngle - ownAngle) % 360 + 360) % 360
+          candidates.push(aligned, (aligned + 180) % 360)
+        })
+      })
+    })
+
+    let finalDeg = deg
+    let bestDiff = SNAP_ANGLE_THRESHOLD_DEG
+    candidates.forEach((candidate) => {
+      const diff = Math.min(Math.abs(deg - candidate), 360 - Math.abs(deg - candidate))
+      if (diff < bestDiff) {
+        bestDiff = diff
+        finalDeg = candidate
+      }
+    })
 
     const restY = centerY - (room.height * SCALE) / 2 - ROTATE_HANDLE_DIST
     const { x: hx, y: hy } = rotateAround(centerX, restY, centerX, centerY, finalDeg)

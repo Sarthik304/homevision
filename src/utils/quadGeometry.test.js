@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getRoomWorldPolygon, snapQuadCorner, snapToOtherRooms } from './quadGeometry'
+import { getRoomWallAngles, getRoomWorldPolygon, snapQuadCorner, snapToOtherRooms } from './quadGeometry'
 
 describe('snapQuadCorner', () => {
   it('allows a corner to be dragged outside the bounding box (stretching a point outward)', () => {
@@ -87,5 +87,38 @@ describe('snapToOtherRooms', () => {
 
   it('returns null when no other room is close enough', () => {
     expect(snapToOtherRooms(rooms, 3, { x: 50, y: 50 })).toBeNull()
+  })
+})
+
+describe('getRoomWallAngles', () => {
+  const round = (angles) => angles.map((a) => Math.round(a * 100) / 100).sort((a, b) => a - b)
+
+  it('gives a plain unrotated rect exactly the 2 orientations 0° and 90° (each edge twice)', () => {
+    const room = { x: 0, y: 0, width: 8, height: 6, shape: 'rect' }
+    expect(round(getRoomWallAngles(room))).toEqual([0, 0, 90, 90])
+  })
+
+  it("shifts by the room's own rotation", () => {
+    const room = { x: 0, y: 0, width: 8, height: 6, shape: 'rect', rotation: 30 }
+    expect(round(getRoomWallAngles(room))).toEqual([30, 30, 120, 120])
+  })
+
+  it("gives a freeform quad's slanted edge its own distinct orientation, not just 0°/90°", () => {
+    const room = {
+      x: 0,
+      y: 0,
+      width: 8,
+      height: 8,
+      shape: 'quad',
+      corners: { tl: { x: 3, y: 0 }, tr: { x: 8, y: 0 }, br: { x: 8, y: 8 }, bl: { x: 0, y: 8 } },
+    }
+    const angles = round(getRoomWallAngles(room))
+    // top and bottom are still horizontal (0°), right is still vertical (90°), but the slanted
+    // left edge (bl -> tl) sits at its own angle, distinctly neither 0° nor 90°
+    expect(angles.filter((a) => a === 0)).toHaveLength(2)
+    expect(angles.filter((a) => a === 90)).toHaveLength(1)
+    const skew = angles.find((a) => a !== 0 && a !== 90)
+    expect(skew).not.toBeCloseTo(0)
+    expect(skew).not.toBeCloseTo(90)
   })
 })
