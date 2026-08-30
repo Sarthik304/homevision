@@ -37,6 +37,11 @@ describe('toDisplayLength / fromDisplayLength', () => {
     const meters = 8.3
     expect(fromDisplayLength(toDisplayLength(meters, 'ft'), 'ft')).toBeCloseTo(meters)
   })
+
+  it("unit 'yd' converts both directions (1 yard = 3 feet = 0.9144m)", () => {
+    expect(toDisplayLength(0.9144, 'yd')).toBeCloseTo(1, 3)
+    expect(fromDisplayLength(1, 'yd')).toBeCloseTo(0.9144, 3)
+  })
 })
 
 describe('roundDisplayLength', () => {
@@ -57,5 +62,9 @@ describe('formatLength', () => {
 
   it('formats feet with a 2-decimal + unit suffix', () => {
     expect(formatLength(1, 'ft')).toBe('3.28ft')
+  })
+
+  it('formats yards with a 2-decimal + unit suffix', () => {
+    expect(formatLength(1, 'yd')).toBe('1.09yd')
   })
 })
