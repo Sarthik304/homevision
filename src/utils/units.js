@@ -12,8 +12,6 @@ export function feetToMeters(feet) {
 // every selectable display unit: how many meters make up one of it, and how many decimals to show
 export const UNIT_OPTIONS = [
   { key: 'm', label: 'Meters', metersPerUnit: 1, decimals: 1 },
-  { key: 'cm', label: 'Centimeters', metersPerUnit: 0.01, decimals: 0 },
-  { key: 'mm', label: 'Millimeters', metersPerUnit: 0.001, decimals: 0 },
   { key: 'yd', label: 'Yards', metersPerUnit: METERS_PER_FOOT * 3, decimals: 2 },
   { key: 'ft', label: 'Feet', metersPerUnit: METERS_PER_FOOT, decimals: 2 },
   { key: 'in', label: 'Inches', metersPerUnit: METERS_PER_FOOT / 12, decimals: 1 },

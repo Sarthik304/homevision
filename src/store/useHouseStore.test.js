@@ -21,8 +21,8 @@ describe('setUnit', () => {
     expect(useHouseStore.getState().unit).toBe('m')
     useHouseStore.getState().setUnit('ft')
     expect(useHouseStore.getState().unit).toBe('ft')
-    useHouseStore.getState().setUnit('cm')
-    expect(useHouseStore.getState().unit).toBe('cm')
+    useHouseStore.getState().setUnit('yd')
+    expect(useHouseStore.getState().unit).toBe('yd')
   })
 })
 
