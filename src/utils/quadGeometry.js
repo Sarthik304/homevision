@@ -1,17 +1,12 @@
-// Pure geometry for dragging one corner of a freeform quadrilateral room, plus a couple of
-// shape-agnostic helpers (world polygon, wall angles) that any room shape can snap against
-// regardless of its own or a neighbor's shape (framework-free).
+// Pure geometry for quad corner-dragging, plus shape-agnostic room polygon/wall-angle helpers (framework-free).
 import { getLPolygon } from '../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../constants/quad'
 import { rotateAround } from './roomGeometry'
 
-// meters, distance within which a dragged corner snaps to a box corner/edge-midpoint/center, or
-// to another room's corner/side — makes it easy to land exactly on a rhombus, kite, or trapezoid,
-// or to butt a point up against a neighboring room, instead of eyeballing it
+// meters, distance within which a dragged corner snaps to a box reference point or another room's edge
 export const QUAD_SNAP_THRESHOLD = 0.35
 
-// snaps a dragged corner (in the room's own local space) to the nearest of the box's 4 corners,
-// 4 edge-midpoints, or center — null if nothing is close enough
+// snaps a dragged corner (local space) to the nearest box corner/edge-midpoint/center — null if nothing's close
 export function snapQuadCorner(width, height, rawX, rawY) {
   const candidates = [
     { x: 0, y: 0 },
@@ -37,8 +32,7 @@ export function snapQuadCorner(width, height, rawX, rawY) {
   return best
 }
 
-// world-space outline of any room — rect, L-shaped, or a freeform quad — accounting for its own
-// rotation, so a dragged corner can snap against a neighbor regardless of that neighbor's shape
+// world-space outline of any room (rect, L-shaped, or quad), accounting for its own rotation
 export function getRoomWorldPolygon(room) {
   const localPoints =
     room.shape === 'L'
@@ -72,9 +66,7 @@ function nearestPointOnSegment(p, a, b) {
   return { x: a.x + t * dx, y: a.y + t * dy }
 }
 
-// snaps a world-space point to the nearest corner or side of any other room. A corner is just
-// where two sides meet, so checking the nearest point on every side covers both at once — no
-// separate corner candidate list needed. Returns null if nothing is close enough.
+// snaps a world-space point to the nearest corner or side of any other room — null if nothing's close
 export function snapToOtherRooms(rooms, excludeRoomId, worldPoint) {
   let best = null
   let bestDist = QUAD_SNAP_THRESHOLD
@@ -94,10 +86,7 @@ export function snapToOtherRooms(rooms, excludeRoomId, worldPoint) {
   return best
 }
 
-// every wall's orientation for any room shape, in world space, normalized to [0, 180) degrees
-// (a wall and the same wall run the opposite direction are the same orientation) — a plain rect
-// or L-shaped room always has 2 distinct values (rotation and rotation+90); a freeform quad can
-// have up to 4, since its edges aren't constrained to right angles
+// every wall's world-space orientation for any room shape, normalized to [0, 180) degrees
 export function getRoomWallAngles(room) {
   const polygon = getRoomWorldPolygon(room)
   const angles = []

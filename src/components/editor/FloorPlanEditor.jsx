@@ -41,8 +41,7 @@ const DIMENSION_POPUP_HEIGHT = 190
 // manual double-click detection (Konva's dblclick is unreliable on draggable shapes)
 const DOUBLE_CLICK_MS = 350
 
-// true if two rooms' bounding boxes are within margin meters of each other (approximate — ignores
-// rotation/actual shape, just enough to gate "is this room roughly nearby" for rotation snapping)
+// true if two rooms' bounding boxes are within margin meters of each other (approximate, for rotation-snap gating)
 function roomsAreNear(a, b, margin) {
   const within1D = (aMin, aMax, bMin, bMax) => aMin - margin <= bMax && bMin - margin <= aMax
   return (
@@ -137,9 +136,7 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
   })
 }
 
-// generalized wall/door/window rendering for any room whose boundary is a list of straight edges
-// (an L-shaped room's 6 edges, or a freeform quad's 4) — everything below is edge-vector math
-// with no assumption the edge is horizontal/vertical, so it works at any angle
+// generalized wall/door/window rendering for any room whose boundary is a list of straight edges, at any angle
 function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
   return edges.filter((edge) => walls[edge.key]).map((edge) => {
     const dx = edge.to.x - edge.from.x
@@ -501,11 +498,7 @@ function lEdgeMidpoint(pixelX, pixelY, pixelW, pixelH, pixelNW, pixelNH, edgeKey
   return [pixelX + (edge.from.x + edge.to.x) / 2, pixelY + (edge.from.y + edge.to.y) / 2]
 }
 
-// a quad room's corner-drag handle — solid brand-colored, distinct from the hollow square
-// edge-resize handles (resize the box) and hollow circular rotate handle (spin the room).
-// Uses plain mousedown/touchstart (see startQuadCornerDrag) rather than Konva's own
-// draggable/onDragMove, which is what avoided a real reported bug where corner-dragging
-// silently didn't work in real browsers despite behaving correctly under automated testing.
+// a quad room's corner-drag handle — solid brand-colored; uses plain mousedown/touchstart (see startQuadCornerDrag) rather than Konva's own draggable, which real browsers didn't reliably fire
 function QuadCornerHandle({ roomId, cornerKey, x, y, color, onDragStart }) {
   const start = (e) => {
     e.cancelBubble = true
@@ -993,11 +986,7 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // angle of the drag handle around the room's center, snapped to the nearest 45° OR to whatever
-  // rotation would make one of this room's own walls parallel to a wall of any nearby room — so
-  // rotating a room next to a skewed quad neighbor can snap flush against its actual wall angle,
-  // not just the 45° grid. Works for every shape combination (rect/L/quad, any shape next to any)
-  // since getRoomWallAngles derives real wall angles from each room's actual polygon.
+  // angle of the drag handle around the room's center, snapped to the nearest 45° or to whatever rotation aligns one of this room's walls with a nearby room's wall, any shape combination
   function computeRoomRotation(e, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -1051,13 +1040,7 @@ export default function FloorPlanEditor() {
     if (deg != null) updateRoom(roomId, { rotation: Math.round(deg * 10) / 10 })
   }
 
-  // given a point in world-pixel space (meters*SCALE+PADDING, matching pixelX/centerX elsewhere),
-  // returns the corresponding local-space point (meters, relative to the room's own x/y) for one
-  // of a quad room's corners, unbounded — a corner can be dragged inside the box (distorting the
-  // shape) or out past it (stretching a point outward). Snaps to whichever is actually closer to
-  // the raw drag position: another room's corner/side (checked first, in world-meters space, so
-  // it works regardless of the dragged room's own rotation), or this room's own box corners/
-  // edge-midpoints/center — the latter is what makes it easy to land exactly on a rhombus or kite.
+  // converts a world-pixel point to a quad corner's local-space point, snapped to whichever is closer: a nearby room's corner/side, or this room's own box corners/edge-midpoints/center
   function computeQuadCornerPoint(point, roomId) {
     const room = rooms.find((r) => r.id === roomId)
     if (!room) return null
@@ -1094,11 +1077,7 @@ export default function FloorPlanEditor() {
     return { x: pointerX, y: pointerY }
   }
 
-  // Quad corner-dragging is driven by plain mousedown/touchstart + window-level move/up listeners
-  // rather than Konva's own draggable/onDragMove — deliberately bypassing Konva's native drag
-  // machinery (see the pinch-zoom listeners above for this file's other case of doing the same),
-  // since the corner handle only needs to read the pointer position each frame and let React's own
-  // re-render move it, with no dependency on Konva's drag-state internals working a given way.
+  // drives quad corner-dragging via plain mousedown/touchstart + window listeners, bypassing Konva's own draggable entirely
   function startQuadCornerDrag(stage, roomId, cornerKey) {
     const container = containerRef.current
     if (!container) return
@@ -1259,11 +1238,7 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // two-finger pinch to zoom/pan. Konva suppresses all its own pointer-event dispatch while
-  // Konva.isDragging() is true (a single-finger touch starts dragging the Stage before a second
-  // finger lands), which silently swallows a Stage onTouchMove prop — so this binds capture-phase
-  // native listeners on the container, ahead of Konva's own bubble-phase listeners on the canvas,
-  // and stops propagation for any 2-finger event so Konva never sees (or drags on) multi-touch.
+  // two-finger pinch to zoom/pan via capture-phase native listeners, since Konva's own touch handling swallows a second finger mid-drag
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -1555,8 +1530,7 @@ export default function FloorPlanEditor() {
 
                 if (room.shape !== 'quad') return boxHandles
 
-                // corner-drag handles let a quad's 4 corners move independently, on top of the
-                // box-resize handles above (which resize the bounding box the corners live in)
+                // corner-drag handles let a quad's 4 corners move independently, alongside the box-resize handles above
                 const corners = quadCornersOf(room)
                 const cornerHandles = QUAD_CORNER_KEYS.map((key) => {
                   const corner = corners[key]

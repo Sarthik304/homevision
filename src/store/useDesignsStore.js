@@ -84,8 +84,7 @@ const useDesignsStore = create((set, get) => ({
     return !error
   },
 
-  // loads a design shared via its link; works signed-out; leaves activeDesignId untouched so a
-  // later save creates the viewer's own copy instead of overwriting the original
+  // loads a design shared via its link; leaves activeDesignId untouched so a later save copies rather than overwrites
   loadPublicDesign: async (designId) => {
     if (!supabase) return false
     set({ sharedDesignError: null })

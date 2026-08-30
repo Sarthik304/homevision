@@ -1,6 +1,4 @@
-// Geometry for freeform quadrilateral rooms: a rectangle whose 4 corners can each be dragged
-// independently within its bounding box, producing a rhombus, trapezoid, kite, parallelogram,
-// or any other irregular quadrilateral.
+// Geometry for freeform quadrilateral rooms: a rectangle whose 4 corners can be dragged independently into any irregular quad.
 
 export const QUAD_CORNER_KEYS = ['tl', 'tr', 'br', 'bl']
 
@@ -19,8 +17,7 @@ export function quadCornersOf(room) {
   return room.corners ?? defaultQuadCorners(room.width, room.height)
 }
 
-// the quad's 4 edges, walked clockwise from the top-left corner — same key set ('top'/'right'/
-// 'bottom'/'left') a plain rectangle uses, so doors/windows/wall-toggles work unchanged
+// the quad's 4 edges, walked clockwise from top-left, using the same wall keys as a plain rect
 export function getQuadEdges(corners) {
   return [
     { key: 'top', from: corners.tl, to: corners.tr },
@@ -34,8 +31,7 @@ export function getQuadPolygon(corners) {
   return QUAD_CORNER_KEYS.map((key) => corners[key])
 }
 
-// rescales corner offsets proportionally after the bounding box is resized, so the shape's
-// proportions carry over instead of the corners drifting outside the new box
+// rescales corner offsets proportionally after the bounding box is resized, preserving the shape
 export function rescaleQuadCorners(corners, oldWidth, oldHeight, newWidth, newHeight) {
   const sx = oldWidth > 0 ? newWidth / oldWidth : 1
   const sy = oldHeight > 0 ? newHeight / oldHeight : 1

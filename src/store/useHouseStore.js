@@ -293,8 +293,7 @@ const useHouseStore = create((set) => ({
       const rooms = state.rooms.map((room) => {
         if (room.id !== id) return room
         const merged = { ...room, ...updates }
-        // resizing a quad's bounding box carries its skew along proportionally, instead of
-        // leaving the corners where they were (which would drift outside the new box)
+        // resizing a quad's bounding box rescales its corners proportionally so the skew carries over
         if (room.shape === 'quad' && ('width' in updates || 'height' in updates)) {
           merged.corners = rescaleQuadCorners(quadCornersOf(room), room.width, room.height, merged.width, merged.height)
         }
@@ -308,8 +307,7 @@ const useHouseStore = create((set) => ({
       return { rooms: resyncSharedDoors(rooms, movedRoom) }
     }),
 
-  // sets one corner of a quad room, reshaping it into a rhombus/trapezoid/kite/parallelogram/
-  // any irregular quadrilateral — point is {x,y} in the room's local (0..width, 0..height) space
+  // sets one corner of a quad room, reshaping it into a rhombus/trapezoid/kite/parallelogram/any irregular quad
   updateQuadCorner: (roomId, cornerKey, point) =>
     set((state) => ({
       rooms: state.rooms.map((room) =>

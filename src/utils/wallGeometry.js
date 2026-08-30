@@ -1,5 +1,4 @@
-// Pure 3D wall-layout math for rect, L-shaped, and freeform quadrilateral rooms, framework-free
-// for unit testing.
+// Pure 3D wall-layout math for rect, L-shaped, and freeform quadrilateral rooms, framework-free for unit testing.
 import { getLEdges } from '../constants/lshape'
 import { getQuadEdges } from '../constants/quad'
 
@@ -40,12 +39,7 @@ export function getLWallDefs(width, height, notchWidth, notchHeight) {
   })
 }
 
-// same wall-def shape as getRectWallDefs, derived from a freeform quadrilateral room's 4 corners
-// (in the room's local width x height meter space). getRectWallDefs/getLWallDefs trim by an exact
-// amount tuned for 90° corners; a quad's corners can be any angle, so a fixed trim would either
-// gap or overlap depending on how acute/obtuse the corner is. Left untrimmed instead: each wall
-// runs the full corner-to-corner edge, so adjacent walls always overlap slightly at the corner
-// rather than risk a gap — a solid-on-solid overlap, not a visible seam.
+// same wall-def shape as getRectWallDefs, derived from a quad's 4 corners — left untrimmed since a fixed trim only suits 90° corners, so adjacent walls overlap slightly rather than risk a gap
 export function getQuadWallDefs(corners, width, height) {
   return getQuadEdges(corners)
     .map(({ key, from, to }) => {

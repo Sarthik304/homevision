@@ -1,12 +1,9 @@
-// runs before every test file (see vite.config.js's test.setupFiles) — extends `expect` with
-// jest-dom's DOM matchers and unmounts any React Testing Library tree after each test so one
-// component test's DOM doesn't leak into the next
+// runs before every test file — extends expect with jest-dom matchers and cleans up RTL after each test
 import { afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 
-// jsdom has no layout engine, so it never matches a real media query — stub it to "no match"
-// (desktop-sized) so components using matchMedia (e.g. useIsMobile) don't crash in tests
+// jsdom has no matchMedia — stub it to "no match" so components like useIsMobile don't crash in tests
 if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = (query) => ({
     matches: false,

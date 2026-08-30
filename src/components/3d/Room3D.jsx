@@ -99,8 +99,7 @@ function buildSolidSegments(length, openings) {
   return segments
 }
 
-// flat non-rectangular mesh used for floor/ceiling — any ordered polygon (an L-shape's edges, or
-// a freeform quad's 4 corners) works the same way (`flipY` handles their opposite X rotations)
+// flat non-rectangular mesh for floor/ceiling — any ordered polygon works (flipY handles their opposite X rotations)
 function buildPolygonShape(points, width, height, flipY) {
   const shape = new Shape()
   points.forEach(({ x, y }, i) => {
