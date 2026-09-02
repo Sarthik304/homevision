@@ -325,6 +325,7 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
           hitStrokeWidth={Math.max(strokeW * 1.8, 14)}
           draggable
           onClick={handleSelect}
+          onTap={handleSelect}
           onDragStart={() => onBodyStart(room.id, wall.id)}
           onDragMove={(e) => onBodyMove(e, room.id, wall.id)}
           onDragEnd={(e) => onBodyEnd(e, room.id, wall.id)}
@@ -407,6 +408,10 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
           cornerRadius={3}
           draggable
           onClick={(e) => {
+            e.cancelBubble = true
+            onSelect(room.id, item.id, e.evt)
+          }}
+          onTap={(e) => {
             e.cancelBubble = true
             onSelect(room.id, item.id, e.evt)
           }}
@@ -1335,6 +1340,7 @@ export default function FloorPlanEditor() {
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         onClick={handleStageClick}
+        onTap={handleStageClick}
       >
         <Layer>
           {rooms.map((room) => {
@@ -1370,6 +1376,7 @@ export default function FloorPlanEditor() {
                 onDragMove={(e) => handleGroupDragMove(e, room.id)}
                 onDragEnd={(e) => handleGroupDragEnd(e, room.id)}
                 onClick={(e) => (e.evt.shiftKey ? toggleRoomSelection(room.id) : selectRoom(room.id))}
+                onTap={() => selectRoom(room.id)}
               >
                 {isL || isQuad ? (
                   <Line
