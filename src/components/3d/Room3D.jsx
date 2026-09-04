@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { Shape } from 'three'
+import { Plane, Shape, Vector3 } from 'three'
 import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
@@ -48,6 +48,106 @@ function SofaMesh({ width, height, depth, color }) {
         <boxGeometry args={[armW, armH, depth]} />
         <meshStandardMaterial color={color} />
       </mesh>
+    </group>
+  )
+}
+
+// shared, stateless horizontal plane at y=0 — every room's floor sits here, used to turn a
+// pointer ray into a world-space point while dragging furniture
+const FLOOR_PLANE = new Plane(new Vector3(0, 1, 0), 0)
+
+// a furniture item you can pick up and move in the 3D view: click (or tap) it, drag to
+// reposition, release to drop. A fresh click/tap is needed to start moving it again afterward —
+// there's no "carry" mode, this is a plain press-drag-release like the 2D editor's furniture.
+function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, onDragChange }) {
+  const selectFurniture = useHouseStore((s) => s.selectFurniture)
+  const updateFurniture = useHouseStore((s) => s.updateFurniture)
+  const groupRef = useRef(null)
+  const dragRef = useRef(null)
+
+  const isSofa = item.type === 'sofa' || item.type === 'lego-sofa'
+  const baseX = item.x + item.width / 2 - room.width / 2
+  const baseZ = item.y + item.depth / 2 - room.height / 2
+
+  // this room's own position + rotation, so a world-space drag point can be converted into the
+  // room's local (unrotated) frame that item.x/item.y are stored in — see the outer group below
+  const posX = room.x + room.width / 2
+  const posZ = room.y + room.height / 2
+  const rotationRad = ((room.rotation ?? 0) * Math.PI) / 180
+  const cos = Math.cos(rotationRad)
+  const sin = Math.sin(rotationRad)
+
+  function pointerToRoomLocal(e) {
+    const point = new Vector3()
+    e.ray.intersectPlane(FLOOR_PLANE, point)
+    const dx = point.x - posX
+    const dz = point.z - posZ
+    return { x: dx * cos + dz * sin, z: -dx * sin + dz * cos }
+  }
+
+  const handlePointerDown = (e) => {
+    e.stopPropagation()
+    onRoomSelect(room.id)
+    selectFurniture(item.id)
+    e.target.setPointerCapture(e.pointerId)
+    const local = pointerToRoomLocal(e)
+    dragRef.current = { grabX: local.x, grabZ: local.z, startX: item.x, startY: item.y, currentX: item.x, currentY: item.y }
+    onDragChange(true)
+  }
+
+  const handlePointerMove = (e) => {
+    if (!dragRef.current) return
+    e.stopPropagation()
+    const local = pointerToRoomLocal(e)
+    const rawX = dragRef.current.startX + (local.x - dragRef.current.grabX)
+    const rawY = dragRef.current.startY + (local.z - dragRef.current.grabZ)
+    const x = Math.min(Math.max(0, rawX), Math.max(0, room.width - item.width))
+    const y = Math.min(Math.max(0, rawY), Math.max(0, room.height - item.depth))
+    if (groupRef.current) {
+      groupRef.current.position.x = x + item.width / 2 - room.width / 2
+      groupRef.current.position.z = y + item.depth / 2 - room.height / 2
+    }
+    dragRef.current.currentX = x
+    dragRef.current.currentY = y
+  }
+
+  const endDrag = (e) => {
+    if (!dragRef.current) return
+    e.stopPropagation()
+    const { currentX, currentY } = dragRef.current
+    updateFurniture(room.id, item.id, {
+      x: Math.round(currentX * 10) / 10,
+      y: Math.round(currentY * 10) / 10,
+    })
+    dragRef.current = null
+    onDragChange(false)
+  }
+
+  return (
+    <group
+      ref={groupRef}
+      position={[baseX, 0, baseZ]}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+    >
+      {isSofa ? (
+        <SofaMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
+      ) : (
+        <mesh position={[0, item.height / 2, 0]}>
+          <boxGeometry args={[item.width, item.height, item.depth]} />
+          <meshStandardMaterial color={item.color} />
+        </mesh>
+      )}
+      {isSelected && (
+        <mesh position={[0, item.height / 2, 0]} raycast={() => null}>
+          <boxGeometry args={[item.width, item.height, item.depth]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          <Edges color={highlightColor} lineWidth={2} />
+        </mesh>
+      )}
     </group>
   )
 }
@@ -206,8 +306,9 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick }) {
+export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange }) {
   const darkMode = useHouseStore((s) => s.darkMode)
+  const selectedFurnitureId = useHouseStore((s) => s.selectedFurnitureId)
   const palette = getColors(darkMode)
   const { width, height, x, y, wallColor, floorColor } = room
   const isL = room.shape === 'L'
@@ -321,26 +422,17 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
         )
       })}
 
-      {(room.furniture ?? []).map((item) => {
-        const isSofa = item.type === 'sofa' || item.type === 'lego-sofa'
-        const centerPosition = [
-          item.x + item.width / 2 - width / 2,
-          isSofa ? 0 : item.height / 2,
-          item.y + item.depth / 2 - height / 2,
-        ]
-        return (
-          <group key={item.id} position={centerPosition}>
-            {isSofa ? (
-              <SofaMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
-            ) : (
-              <mesh>
-                <boxGeometry args={[item.width, item.height, item.depth]} />
-                <meshStandardMaterial color={item.color} />
-              </mesh>
-            )}
-          </group>
-        )
-      })}
+      {(room.furniture ?? []).map((item) => (
+        <FurnitureItem
+          key={item.id}
+          item={item}
+          room={room}
+          isSelected={item.id === selectedFurnitureId}
+          highlightColor={palette.brand}
+          onRoomSelect={onClick}
+          onDragChange={onFurnitureDragChange}
+        />
+      ))}
 
       {isSelected && (
         <mesh position={[0, WALL_HEIGHT / 2, 0]} raycast={() => null}>

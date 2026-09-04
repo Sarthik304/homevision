@@ -60,6 +60,7 @@ export default function HouseViewer() {
   const containerRef = useRef(null)
   const [colorPicker, setColorPicker] = useState(null) // { roomId, kind, key, x, y }
   const [pickMode, setPickMode] = useState(false) // eyedropper: sampling colour from another wall
+  const [draggingFurniture, setDraggingFurniture] = useState(false) // disables orbit while dragging
 
   const handleSelectWall = (kind, key) => {
     if (kind === 'boundary') selectBoundaryWall(key)
@@ -170,6 +171,7 @@ export default function HouseViewer() {
               onWallDoubleClick={handleWallDoubleClick}
               pickMode={pickMode}
               onWallColorPick={handleWallColorPick}
+              onFurnitureDragChange={setDraggingFurniture}
             />
           ))}
         </group>
@@ -185,6 +187,7 @@ export default function HouseViewer() {
 
         <OrbitControls
           makeDefault
+          enabled={!draggingFurniture}
           minDistance={5}
           maxDistance={100}
           maxPolarAngle={Math.PI / 2}
