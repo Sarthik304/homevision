@@ -88,7 +88,8 @@ function WallToggles({ room, toggleWall, color }) {
         })}
       </div>
       <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
-        Toggle a side to add or remove a wall wherever the floor is present.
+        Toggle a side to add or remove a wall wherever the floor is present. In the 2D view,
+        double-click a wall to type its exact length.
       </div>
     </div>
   )
@@ -844,7 +845,8 @@ export default function Sidebar() {
               <div style={{ fontSize: 11, color: color.muted, marginTop: 6 }}>
                 Drag a corner in the 2D view to reshape this room — inward for a rhombus, kite,
                 trapezoid, or parallelogram, or pull it outward past the box for a dart or arrow
-                point. It snaps to an edge's midpoint or the center along the way.
+                point. It snaps to an edge's midpoint or the center along the way. Or double-click
+                a wall to type its exact length — its far corner slides to match.
               </div>
             </div>
           )}

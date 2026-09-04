@@ -15,6 +15,7 @@ import {
   roomsInMarquee,
 } from '../../utils/interiorWallGeometry'
 import { getRoomWallAngles, snapQuadCorner, snapToOtherRooms } from '../../utils/quadGeometry'
+import { MIN_BOUNDARY_WALL_LENGTH, getBoundaryWallLength, resizeQuadWall, resizeRectOrLWall } from '../../utils/boundaryWallGeometry'
 import { formatLength } from '../../utils/units'
 import { MIN_FURNITURE_SIZE, resizeFurnitureCorner } from '../../utils/furnitureGeometry'
 import { eventClientXY } from '../../utils/pointerPosition'
@@ -73,7 +74,7 @@ function solidWallStretches(lengthPx, doors) {
   return solids
 }
 
-function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
+function RoomWalls({ room, pixelW, pixelH, isSelected, color, selectedWallKey, onSelectWall }) {
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
   const windows = room.windows ?? []
@@ -83,6 +84,7 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
     const lengthPx = isHorizontal ? pixelW : pixelH
     const fixedCoord = key === 'top' ? 0 : key === 'bottom' ? pixelH : key === 'left' ? 0 : pixelW
     const inward = key === 'top' ? 1 : key === 'bottom' ? -1 : key === 'left' ? 1 : -1
+    const wallHighlighted = isSelected && key === selectedWallKey
 
     const wallDoors = doors.filter((d) => d.wall === key)
     const wallWindows = windows.filter((w) => w.wall === key)
@@ -96,11 +98,36 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
           <Line
             key={`wall-${i}`}
             points={toPoints(s, e)}
-            stroke={isSelected ? color.brand : color.text}
-            strokeWidth={isSelected ? 3.5 : 2.5}
+            stroke={wallHighlighted ? color.brand : isSelected ? color.brand : color.text}
+            strokeWidth={wallHighlighted || isSelected ? 3.5 : 2.5}
             lineCap="square"
+            listening={false}
           />
         ))}
+
+        {/* wide click target so the wall's own length can be typed, same pattern as interior walls */}
+        <Line
+          points={toPoints(0, lengthPx)}
+          stroke={color.brand}
+          opacity={wallHighlighted ? 0.18 : 0.001}
+          strokeWidth={14}
+          lineCap="round"
+          hitStrokeWidth={14}
+          onClick={(e) => {
+            e.cancelBubble = true
+            onSelectWall(key, e.evt)
+          }}
+          onTap={(e) => {
+            e.cancelBubble = true
+            onSelectWall(key, e.evt)
+          }}
+          onMouseEnter={(e) => {
+            e.target.getStage().container().style.cursor = 'pointer'
+          }}
+          onMouseLeave={(e) => {
+            e.target.getStage().container().style.cursor = 'default'
+          }}
+        />
 
         {wallWindows.map((win) => {
           const w = Math.min(win.width * SCALE, lengthPx)
@@ -140,7 +167,7 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color }) {
 }
 
 // generalized wall/door/window rendering for any room whose boundary is a list of straight edges, at any angle
-function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
+function EdgeWalls({ edges, walls, doors, windows, isSelected, color, selectedWallKey, onSelectWall }) {
   return edges.filter((edge) => walls[edge.key]).map((edge) => {
     const dx = edge.to.x - edge.from.x
     const dy = edge.to.y - edge.from.y
@@ -151,6 +178,7 @@ function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
     const nx = -uy
     const ny = ux
     const toPoint = (t) => [edge.from.x + ux * t, edge.from.y + uy * t]
+    const wallHighlighted = isSelected && edge.key === selectedWallKey
 
     const wallDoors = doors.filter((d) => d.wall === edge.key)
     const wallWindows = windows.filter((w) => w.wall === edge.key)
@@ -165,12 +193,37 @@ function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
             <Line
               key={`wall-${i}`}
               points={[sx, sy, ex, ey]}
-              stroke={isSelected ? color.brand : color.text}
-              strokeWidth={isSelected ? 3.5 : 2.5}
+              stroke={wallHighlighted ? color.brand : isSelected ? color.brand : color.text}
+              strokeWidth={wallHighlighted || isSelected ? 3.5 : 2.5}
               lineCap="square"
+              listening={false}
             />
           )
         })}
+
+        {/* wide click target so the wall's own length can be typed, same pattern as interior walls */}
+        <Line
+          points={[edge.from.x, edge.from.y, edge.to.x, edge.to.y]}
+          stroke={color.brand}
+          opacity={wallHighlighted ? 0.18 : 0.001}
+          strokeWidth={14}
+          lineCap="round"
+          hitStrokeWidth={14}
+          onClick={(e) => {
+            e.cancelBubble = true
+            onSelectWall(edge.key, e.evt)
+          }}
+          onTap={(e) => {
+            e.cancelBubble = true
+            onSelectWall(edge.key, e.evt)
+          }}
+          onMouseEnter={(e) => {
+            e.target.getStage().container().style.cursor = 'pointer'
+          }}
+          onMouseLeave={(e) => {
+            e.target.getStage().container().style.cursor = 'default'
+          }}
+        />
 
         {wallWindows.map((win) => {
           const w = Math.min(win.width * SCALE, lengthPx)
@@ -209,7 +262,7 @@ function EdgeWalls({ edges, walls, doors, windows, isSelected, color }) {
   })
 }
 
-function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color }) {
+function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color, selectedWallKey, onSelectWall }) {
   return (
     <EdgeWalls
       edges={getLEdges(pixelW, pixelH, pixelNW, pixelNH)}
@@ -218,11 +271,13 @@ function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color 
       windows={room.windows ?? []}
       isSelected={isSelected}
       color={color}
+      selectedWallKey={selectedWallKey}
+      onSelectWall={onSelectWall}
     />
   )
 }
 
-function QuadRoomWalls({ room, pixelCorners, isSelected, color }) {
+function QuadRoomWalls({ room, pixelCorners, isSelected, color, selectedWallKey, onSelectWall }) {
   return (
     <EdgeWalls
       edges={getQuadEdges(pixelCorners)}
@@ -231,6 +286,8 @@ function QuadRoomWalls({ room, pixelCorners, isSelected, color }) {
       windows={room.windows ?? []}
       isSelected={isSelected}
       color={color}
+      selectedWallKey={selectedWallKey}
+      onSelectWall={onSelectWall}
     />
   )
 }
@@ -475,7 +532,9 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
 }
 
 // dumb node; x/y is the handle's target midpoint in stage-pixel space
-function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResizeEnd }) {
+// sits right on top of the same edge's click target once selected, so it also needs to hand plain
+// clicks (not drags) to onSelectWall or a click here would silently swallow the wall-length popup
+function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResizeEnd, onSelectWall }) {
   return (
     <Rect
       x={x - HANDLE_SIZE / 2}
@@ -490,6 +549,14 @@ function ResizeHandle({ roomId, edge, x, y, cursor, color, onResizeMove, onResiz
       hitStrokeWidth={16}
       onDragMove={(e) => onResizeMove(e, roomId, edge)}
       onDragEnd={(e) => onResizeEnd(e, roomId, edge)}
+      onClick={(e) => {
+        e.cancelBubble = true
+        onSelectWall(edge, e.evt)
+      }}
+      onTap={(e) => {
+        e.cancelBubble = true
+        onSelectWall(edge, e.evt)
+      }}
       onMouseEnter={(e) => {
         e.target.getStage().container().style.cursor = cursor
       }}
@@ -572,6 +639,8 @@ const selectFloorPlanState = (s) => ({
   selectedInteriorWallId: s.selectedInteriorWallId,
   selectInteriorWall: s.selectInteriorWall,
   updateInteriorWall: s.updateInteriorWall,
+  selectedBoundaryWallKey: s.selectedBoundaryWallKey,
+  selectBoundaryWall: s.selectBoundaryWall,
   selectedFurnitureId: s.selectedFurnitureId,
   selectFurniture: s.selectFurniture,
   updateFurniture: s.updateFurniture,
@@ -594,6 +663,8 @@ export default function FloorPlanEditor() {
     selectedInteriorWallId,
     selectInteriorWall,
     updateInteriorWall,
+    selectedBoundaryWallKey,
+    selectBoundaryWall,
     selectedFurnitureId,
     selectFurniture,
     updateFurniture,
@@ -610,11 +681,12 @@ export default function FloorPlanEditor() {
   const [isShiftHeld, setIsShiftHeld] = useState(false)
   const [marquee, setMarquee] = useState(null) // rubber-band selection box, world-pixel space
   const [dimensionPopup, setDimensionPopup] = useState(null) // { roomId, furnitureId, x, y } | null
-  const [wallLengthPopup, setWallLengthPopup] = useState(null) // { roomId, wallId, x, y } | null
+  const [wallLengthPopup, setWallLengthPopup] = useState(null) // { roomId, kind, wallKey, x, y } | null
   const groupDragRef = useRef(null) // group-drag start snapshot (see handleGroupDragMove)
   const wallBodyDragRef = useRef(null) // interior wall drag start snapshot (see startInteriorWallBodyDrag)
   const furnitureClickRef = useRef({ id: null, time: 0 }) // last furniture click, for double-click detection
   const wallClickRef = useRef({ id: null, time: 0 }) // last interior wall click, for double-click detection
+  const boundaryWallClickRef = useRef({ id: null, time: 0 }) // last boundary wall click, for double-click detection
   const pinchRef = useRef(null) // two-finger pinch-zoom start snapshot (see the touchmove listener below)
   const stageRef = useRef(null)
   const stageScaleRef = useRef(stageScale) // mirrors state for the native touch listeners' stable closures
@@ -833,15 +905,34 @@ export default function FloorPlanEditor() {
     const last = wallClickRef.current
     if (last.id === wallId && now - last.time < DOUBLE_CLICK_MS) {
       wallClickRef.current = { id: null, time: 0 }
-      openWallLengthPopup(roomId, wallId, nativeEvent)
+      openWallLengthPopup(roomId, 'interior', wallId, nativeEvent)
     } else {
       wallClickRef.current = { id: wallId, time: now }
       setWallLengthPopup(null)
     }
   }
 
-  // opens a popup to type an interior wall's exact length
-  function openWallLengthPopup(roomId, wallId, nativeEvent) {
+  // selects one of a room's own boundary/edge walls (rect/L/quad); same double-click-to-type-length
+  // pattern as interior walls, now also driving the wall highlight (shared with the 3D wall picker)
+  function handleBoundaryWallClick(roomId, wallKey, nativeEvent) {
+    selectRoom(roomId)
+    selectBoundaryWall(wallKey)
+
+    const clickId = `${roomId}:${wallKey}`
+    const now = performance.now()
+    const last = boundaryWallClickRef.current
+    if (last.id === clickId && now - last.time < DOUBLE_CLICK_MS) {
+      boundaryWallClickRef.current = { id: null, time: 0 }
+      openWallLengthPopup(roomId, 'boundary', wallKey, nativeEvent)
+    } else {
+      boundaryWallClickRef.current = { id: clickId, time: now }
+      setWallLengthPopup(null)
+    }
+  }
+
+  // opens a popup to type a wall's exact length — kind 'interior' (wallKey = interior wall id) or
+  // 'boundary' (wallKey = edge key like 'top'/'notchV'/etc.)
+  function openWallLengthPopup(roomId, kind, wallKey, nativeEvent) {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return
     const { clientX, clientY } = eventClientXY(nativeEvent)
@@ -849,7 +940,8 @@ export default function FloorPlanEditor() {
     const rawY = clientY - rect.top
     setWallLengthPopup({
       roomId,
-      wallId,
+      kind,
+      wallKey,
       x: Math.min(Math.max(8, rawX), rect.width - WALL_LENGTH_POPUP_WIDTH - 8),
       y: Math.min(Math.max(8, rawY), rect.height - WALL_LENGTH_POPUP_HEIGHT - 8),
     })
@@ -868,6 +960,21 @@ export default function FloorPlanEditor() {
       x2: Math.round((wall.x1 + length * Math.cos(angle)) * 10) / 10,
       y2: Math.round((wall.y1 + length * Math.sin(angle)) * 10) / 10,
     })
+  }
+
+  // sets one of a room's own boundary walls to an exact length: a quad wall slides its far corner
+  // out along the wall's current angle (same convention as above); a rect/L wall resizes the room
+  // itself, always anchored at the room's own (x, y) so it can never shove the room into a neighbor
+  function commitBoundaryWallLength(roomId, wallKey, newLengthMeters) {
+    const room = rooms.find((r) => r.id === roomId)
+    if (!room) return
+    if (room.shape === 'quad') {
+      const { cornerKey, point } = resizeQuadWall(room, wallKey, newLengthMeters)
+      updateQuadCorner(roomId, cornerKey, point)
+    } else {
+      const patch = resizeRectOrLWall(room, wallKey, newLengthMeters)
+      updateRoom(roomId, Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, Math.round(v * 10) / 10])))
+    }
   }
 
   function resizeRoomForEdge(e, roomId, edge) {
@@ -1364,7 +1471,23 @@ export default function FloorPlanEditor() {
   const dimensionPopupItem = dimensionPopupRoom?.furniture?.find((f) => f.id === dimensionPopup?.furnitureId)
 
   const wallLengthPopupRoom = wallLengthPopup ? rooms.find((r) => r.id === wallLengthPopup.roomId) : null
-  const wallLengthPopupWall = wallLengthPopupRoom?.interiorWalls?.find((w) => w.id === wallLengthPopup?.wallId)
+  const wallLengthPopupWall =
+    wallLengthPopup?.kind === 'interior'
+      ? wallLengthPopupRoom?.interiorWalls?.find((w) => w.id === wallLengthPopup?.wallKey)
+      : null
+  const wallLengthPopupLengthMeters =
+    wallLengthPopup?.kind === 'boundary' && wallLengthPopupRoom
+      ? getBoundaryWallLength(wallLengthPopupRoom, wallLengthPopup.wallKey)
+      : wallLengthPopupWall
+        ? Math.hypot(wallLengthPopupWall.x2 - wallLengthPopupWall.x1, wallLengthPopupWall.y2 - wallLengthPopupWall.y1)
+        : null
+  const wallLengthPopupMin = wallLengthPopup?.kind === 'boundary' ? MIN_BOUNDARY_WALL_LENGTH : MIN_INTERIOR_WALL_LENGTH
+  const wallLengthPopupOnCommit =
+    wallLengthPopup?.kind === 'boundary'
+      ? (meters) => commitBoundaryWallLength(wallLengthPopup.roomId, wallLengthPopup.wallKey, meters)
+      : wallLengthPopupWall
+        ? (meters) => commitWallLength(wallLengthPopup.roomId, wallLengthPopupWall, meters)
+        : null
 
   return (
     <div
@@ -1466,11 +1589,28 @@ export default function FloorPlanEditor() {
                     pixelNH={pixelNH}
                     isSelected={isSelected}
                     color={color}
+                    selectedWallKey={selectedBoundaryWallKey}
+                    onSelectWall={(wallKey, nativeEvent) => handleBoundaryWallClick(room.id, wallKey, nativeEvent)}
                   />
                 ) : isQuad ? (
-                  <QuadRoomWalls room={room} pixelCorners={pixelCorners} isSelected={isSelected} color={color} />
+                  <QuadRoomWalls
+                    room={room}
+                    pixelCorners={pixelCorners}
+                    isSelected={isSelected}
+                    color={color}
+                    selectedWallKey={selectedBoundaryWallKey}
+                    onSelectWall={(wallKey, nativeEvent) => handleBoundaryWallClick(room.id, wallKey, nativeEvent)}
+                  />
                 ) : (
-                  <RoomWalls room={room} pixelW={pixelW} pixelH={pixelH} isSelected={isSelected} color={color} />
+                  <RoomWalls
+                    room={room}
+                    pixelW={pixelW}
+                    pixelH={pixelH}
+                    isSelected={isSelected}
+                    color={color}
+                    selectedWallKey={selectedBoundaryWallKey}
+                    onSelectWall={(wallKey, nativeEvent) => handleBoundaryWallClick(room.id, wallKey, nativeEvent)}
+                  />
                 )}
 
                 <InteriorWalls
@@ -1562,6 +1702,7 @@ export default function FloorPlanEditor() {
                         color={color}
                         onResizeMove={handleLResizeMove}
                         onResizeEnd={handleLResizeEnd}
+                        onSelectWall={(wallKey, nativeEvent) => handleBoundaryWallClick(room.id, wallKey, nativeEvent)}
                       />
                     )
                   })
@@ -1587,6 +1728,7 @@ export default function FloorPlanEditor() {
                       color={color}
                       onResizeMove={handleResizeMove}
                       onResizeEnd={handleResizeEnd}
+                      onSelectWall={(wallKey, nativeEvent) => handleBoundaryWallClick(room.id, wallKey, nativeEvent)}
                     />
                   )
                 })
@@ -1736,7 +1878,7 @@ export default function FloorPlanEditor() {
         </div>
       )}
 
-      {wallLengthPopup && wallLengthPopupWall && (
+      {wallLengthPopup && wallLengthPopupLengthMeters != null && (
         <div
           className="pixel-shadow"
           style={{
@@ -1783,13 +1925,10 @@ export default function FloorPlanEditor() {
             Length ({unit})
           </label>
           <DimensionInput
-            valueMeters={Math.hypot(
-              wallLengthPopupWall.x2 - wallLengthPopupWall.x1,
-              wallLengthPopupWall.y2 - wallLengthPopupWall.y1
-            )}
+            valueMeters={wallLengthPopupLengthMeters}
             unit={unit}
-            min={MIN_INTERIOR_WALL_LENGTH}
-            onCommit={(meters) => commitWallLength(wallLengthPopup.roomId, wallLengthPopupWall, meters)}
+            min={wallLengthPopupMin}
+            onCommit={wallLengthPopupOnCommit}
             style={{
               width: '100%',
               padding: '6px 8px',
@@ -1893,7 +2032,7 @@ export default function FloorPlanEditor() {
       >
         {isMobile
           ? 'Pinch to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it'
-          : 'Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it, or double-click it to type an exact length'}
+          : 'Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click any wall (boundary or interior) to select it, then double-click it to type an exact length — its far end moves to match · Interior walls can also be dragged to move, or their round end handles to rotate/stretch'}
       </div>
     </div>
   )
