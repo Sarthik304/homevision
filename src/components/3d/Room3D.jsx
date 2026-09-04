@@ -14,6 +14,44 @@ const EPS = 0.001
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
+// proportions for a sofa's seat/backrest/armrest breakdown, as fractions of its own bounding box
+const SOFA_SEAT_HEIGHT_RATIO = 0.5
+const SOFA_BACK_DEPTH_RATIO = 0.18
+const SOFA_ARM_WIDTH_RATIO = 0.14
+const SOFA_ARM_HEIGHT_RATIO = 0.8
+
+// a sofa built from 4 boxes (seat, backrest, 2 armrests) instead of one slab — the same
+// base + backrest + arms breakdown a real sofa build uses, just boxes instead of bricks
+function SofaMesh({ width, height, depth, color }) {
+  const armW = width * SOFA_ARM_WIDTH_RATIO
+  const backD = depth * SOFA_BACK_DEPTH_RATIO
+  const seatH = height * SOFA_SEAT_HEIGHT_RATIO
+  const armH = height * SOFA_ARM_HEIGHT_RATIO
+  const seatW = width - armW * 2
+  const seatD = depth - backD
+
+  return (
+    <group>
+      <mesh position={[0, seatH / 2, backD / 2]}>
+        <boxGeometry args={[seatW, seatH, seatD]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[0, height / 2, -depth / 2 + backD / 2]}>
+        <boxGeometry args={[width, height, backD]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[-width / 2 + armW / 2, armH / 2, 0]}>
+        <boxGeometry args={[armW, armH, depth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <mesh position={[width / 2 - armW / 2, armH / 2, 0]}>
+        <boxGeometry args={[armW, armH, depth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    </group>
+  )
+}
+
 // manual double-click detection (Safari/touch don't reliably fire native dblclick on canvas)
 const DOUBLE_CLICK_MS = 350
 
@@ -283,19 +321,26 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
         )
       })}
 
-      {(room.furniture ?? []).map((item) => (
-        <mesh
-          key={item.id}
-          position={[
-            item.x + item.width / 2 - width / 2,
-            item.height / 2,
-            item.y + item.depth / 2 - height / 2,
-          ]}
-        >
-          <boxGeometry args={[item.width, item.height, item.depth]} />
-          <meshStandardMaterial color={item.color} />
-        </mesh>
-      ))}
+      {(room.furniture ?? []).map((item) => {
+        const isSofa = item.type === 'sofa' || item.type === 'lego-sofa'
+        const centerPosition = [
+          item.x + item.width / 2 - width / 2,
+          isSofa ? 0 : item.height / 2,
+          item.y + item.depth / 2 - height / 2,
+        ]
+        return (
+          <group key={item.id} position={centerPosition}>
+            {isSofa ? (
+              <SofaMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
+            ) : (
+              <mesh>
+                <boxGeometry args={[item.width, item.height, item.depth]} />
+                <meshStandardMaterial color={item.color} />
+              </mesh>
+            )}
+          </group>
+        )
+      })}
 
       {isSelected && (
         <mesh position={[0, WALL_HEIGHT / 2, 0]} raycast={() => null}>
