@@ -8,6 +8,7 @@ import { getLEdges, getLPolygon, MIN_NOTCH, L_WALL_KEYS, DEFAULT_L_WALLS } from 
 import { QUAD_CORNER_KEYS, getQuadEdges, getQuadPolygon, quadCornersOf } from '../../constants/quad'
 import { rotateAround, getRoomAABB, getSnappedPosition } from '../../utils/roomGeometry'
 import {
+  MIN_INTERIOR_WALL_LENGTH,
   SNAP_ANGLE_THRESHOLD_DEG,
   computeWallBodyTranslate,
   computeWallEndpointMove,
@@ -38,6 +39,8 @@ const FURNITURE_CORNERS = ['tl', 'tr', 'bl', 'br']
 const FURNITURE_CORNER_CURSORS = { tl: 'nwse-resize', br: 'nwse-resize', tr: 'nesw-resize', bl: 'nesw-resize' }
 const DIMENSION_POPUP_WIDTH = 180
 const DIMENSION_POPUP_HEIGHT = 190
+const WALL_LENGTH_POPUP_WIDTH = 170
+const WALL_LENGTH_POPUP_HEIGHT = 100
 // manual double-click detection (Konva's dblclick is unreliable on draggable shapes)
 const DOUBLE_CLICK_MS = 350
 
@@ -260,7 +263,7 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
 
     const handleSelect = (e) => {
       e.cancelBubble = true
-      onSelectWall(wall.id)
+      onSelectWall(wall.id, e.evt)
     }
 
     return (
@@ -607,9 +610,11 @@ export default function FloorPlanEditor() {
   const [isShiftHeld, setIsShiftHeld] = useState(false)
   const [marquee, setMarquee] = useState(null) // rubber-band selection box, world-pixel space
   const [dimensionPopup, setDimensionPopup] = useState(null) // { roomId, furnitureId, x, y } | null
+  const [wallLengthPopup, setWallLengthPopup] = useState(null) // { roomId, wallId, x, y } | null
   const groupDragRef = useRef(null) // group-drag start snapshot (see handleGroupDragMove)
   const wallBodyDragRef = useRef(null) // interior wall drag start snapshot (see startInteriorWallBodyDrag)
   const furnitureClickRef = useRef({ id: null, time: 0 }) // last furniture click, for double-click detection
+  const wallClickRef = useRef({ id: null, time: 0 }) // last interior wall click, for double-click detection
   const pinchRef = useRef(null) // two-finger pinch-zoom start snapshot (see the touchmove listener below)
   const stageRef = useRef(null)
   const stageScaleRef = useRef(stageScale) // mirrors state for the native touch listeners' stable closures
@@ -623,6 +628,7 @@ export default function FloorPlanEditor() {
       if (e.key === 'Shift') setIsShiftHeld(true)
       if (e.key === 'Escape') {
         if (dimensionPopup) setDimensionPopup(null)
+        else if (wallLengthPopup) setWallLengthPopup(null)
         else setSelectedRoomIds([])
       }
     }
@@ -635,7 +641,7 @@ export default function FloorPlanEditor() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [setSelectedRoomIds, dimensionPopup])
+  }, [setSelectedRoomIds, dimensionPopup, wallLengthPopup])
 
   // syncs viewCenter so new rooms spawn where the user is looking
   useEffect(() => {
@@ -785,6 +791,7 @@ export default function FloorPlanEditor() {
     if (e.target !== e.target.getStage()) return
     selectRoom(null)
     setDimensionPopup(null)
+    setWallLengthPopup(null)
   }
 
   // selects furniture; two clicks on the same item within DOUBLE_CLICK_MS open the dimensions popup
@@ -814,6 +821,52 @@ export default function FloorPlanEditor() {
       furnitureId,
       x: Math.min(Math.max(8, rawX), rect.width - DIMENSION_POPUP_WIDTH - 8),
       y: Math.min(Math.max(8, rawY), rect.height - DIMENSION_POPUP_HEIGHT - 8),
+    })
+  }
+
+  // selects an interior wall; two clicks on the same wall within DOUBLE_CLICK_MS open a popup to
+  // type its exact length, the same pattern handleFurnitureClick/openDimensionPopup use above
+  function handleInteriorWallClick(roomId, wallId, nativeEvent) {
+    selectInteriorWall(wallId)
+
+    const now = performance.now()
+    const last = wallClickRef.current
+    if (last.id === wallId && now - last.time < DOUBLE_CLICK_MS) {
+      wallClickRef.current = { id: null, time: 0 }
+      openWallLengthPopup(roomId, wallId, nativeEvent)
+    } else {
+      wallClickRef.current = { id: wallId, time: now }
+      setWallLengthPopup(null)
+    }
+  }
+
+  // opens a popup to type an interior wall's exact length
+  function openWallLengthPopup(roomId, wallId, nativeEvent) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const { clientX, clientY } = eventClientXY(nativeEvent)
+    const rawX = clientX - rect.left
+    const rawY = clientY - rect.top
+    setWallLengthPopup({
+      roomId,
+      wallId,
+      x: Math.min(Math.max(8, rawX), rect.width - WALL_LENGTH_POPUP_WIDTH - 8),
+      y: Math.min(Math.max(8, rawY), rect.height - WALL_LENGTH_POPUP_HEIGHT - 8),
+    })
+  }
+
+  // sets a wall's exact length by moving its second endpoint out along the wall's current angle,
+  // keeping the first endpoint fixed — the same convention furniture's corner-resize uses (one
+  // point stays put). Not clamped to the room, matching how a typed furniture dimension isn't
+  // either — only interactive dragging enforces that.
+  function commitWallLength(roomId, wall, newLengthMeters) {
+    const dx = wall.x2 - wall.x1
+    const dy = wall.y2 - wall.y1
+    const angle = Math.hypot(dx, dy) > 0 ? Math.atan2(dy, dx) : 0
+    const length = Math.max(MIN_INTERIOR_WALL_LENGTH, newLengthMeters)
+    updateInteriorWall(roomId, wall.id, {
+      x2: Math.round((wall.x1 + length * Math.cos(angle)) * 10) / 10,
+      y2: Math.round((wall.y1 + length * Math.sin(angle)) * 10) / 10,
     })
   }
 
@@ -1310,6 +1363,9 @@ export default function FloorPlanEditor() {
   const dimensionPopupRoom = dimensionPopup ? rooms.find((r) => r.id === dimensionPopup.roomId) : null
   const dimensionPopupItem = dimensionPopupRoom?.furniture?.find((f) => f.id === dimensionPopup?.furnitureId)
 
+  const wallLengthPopupRoom = wallLengthPopup ? rooms.find((r) => r.id === wallLengthPopup.roomId) : null
+  const wallLengthPopupWall = wallLengthPopupRoom?.interiorWalls?.find((w) => w.id === wallLengthPopup?.wallId)
+
   return (
     <div
       ref={containerRef}
@@ -1421,7 +1477,7 @@ export default function FloorPlanEditor() {
                   room={room}
                   selectedWallId={selectedInteriorWallId}
                   color={color}
-                  onSelectWall={selectInteriorWall}
+                  onSelectWall={(wallId, nativeEvent) => handleInteriorWallClick(room.id, wallId, nativeEvent)}
                   onBodyStart={startInteriorWallBodyDrag}
                   onBodyMove={handleInteriorWallBodyMove}
                   onBodyEnd={handleInteriorWallBodyEnd}
@@ -1680,6 +1736,74 @@ export default function FloorPlanEditor() {
         </div>
       )}
 
+      {wallLengthPopup && wallLengthPopupWall && (
+        <div
+          className="pixel-shadow"
+          style={{
+            position: 'absolute',
+            left: wallLengthPopup.x,
+            top: wallLengthPopup.y,
+            width: WALL_LENGTH_POPUP_WIDTH,
+            background: color.bg,
+            border: `1.5px solid ${color.text}`,
+            borderRadius: radius.md,
+            '--pixel-shadow-color': color.text,
+            padding: 10,
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 8,
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>Wall length</span>
+            <button
+              onClick={() => setWallLengthPopup(null)}
+              aria-label="Close"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: color.muted,
+                cursor: 'pointer',
+                fontSize: 15,
+                lineHeight: 1,
+                padding: '2px 4px',
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>
+            Length ({unit})
+          </label>
+          <DimensionInput
+            valueMeters={Math.hypot(
+              wallLengthPopupWall.x2 - wallLengthPopupWall.x1,
+              wallLengthPopupWall.y2 - wallLengthPopupWall.y1
+            )}
+            unit={unit}
+            min={MIN_INTERIOR_WALL_LENGTH}
+            onCommit={(meters) => commitWallLength(wallLengthPopup.roomId, wallLengthPopupWall, meters)}
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              fontSize: 12,
+              border: `1px solid ${color.borderInput}`,
+              borderRadius: radius.sm,
+              background: color.surface,
+              color: color.text,
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+      )}
+
       <div
         className="pixel-shadow"
         style={{
@@ -1769,7 +1893,7 @@ export default function FloorPlanEditor() {
       >
         {isMobile
           ? 'Pinch to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it'
-          : 'Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it'}
+          : 'Scroll to zoom · Drag empty space to pan · Drag a room to reposition or its edge handles to resize it · Shift-click rooms (or shift-drag a box) to multi-select, then drag any of them to move the group · Click an interior wall to select just that wall, then drag it to move it or its round end handles to rotate/stretch it, or double-click it to type an exact length'}
       </div>
     </div>
   )
