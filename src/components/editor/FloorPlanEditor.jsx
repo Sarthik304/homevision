@@ -29,6 +29,7 @@ const HANDLE_SIZE = 9 // px, edge resize handle size
 const EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', left: 'ew-resize', right: 'ew-resize' }
 const L_EDGE_CURSORS = { top: 'ns-resize', bottom: 'ns-resize', notchH: 'ns-resize', left: 'ew-resize', right: 'ew-resize', notchV: 'ew-resize' }
 const INTERIOR_HANDLE_RADIUS = 7 // px, interior wall endpoint handle
+const PICTURE_MARKER_DEPTH = 10 // px, how far a picture's 2D marker sits in from the wall line
 const ROTATE_SNAP_DEG = 45 // degrees per rotation handle "click"
 const ROTATE_HANDLE_DIST = 24 // px above the room's top edge for its rotation handle
 const ROTATE_HANDLE_RADIUS = 6 // px
@@ -161,13 +162,33 @@ function RoomWalls({ room, pixelW, pixelH, isSelected, color, selectedWallKey, o
             />
           )
         })}
+
+        {(room.pictures ?? []).filter((p) => p.wall === key).map((pic) => {
+          const w = Math.min(pic.width * SCALE, lengthPx)
+          const start = Math.max(0, pic.offset * lengthPx - w / 2)
+          const end = Math.min(lengthPx, start + w)
+          const nearEdge = inward > 0 ? fixedCoord : fixedCoord - PICTURE_MARKER_DEPTH
+          return (
+            <Rect
+              key={pic.id}
+              x={isHorizontal ? start : nearEdge}
+              y={isHorizontal ? nearEdge : start}
+              width={isHorizontal ? end - start : PICTURE_MARKER_DEPTH}
+              height={isHorizontal ? PICTURE_MARKER_DEPTH : end - start}
+              fill={color.picture}
+              stroke={color.text}
+              strokeWidth={1}
+              listening={false}
+            />
+          )
+        })}
       </Group>
     )
   })
 }
 
 // generalized wall/door/window rendering for any room whose boundary is a list of straight edges, at any angle
-function EdgeWalls({ edges, walls, doors, windows, isSelected, color, selectedWallKey, onSelectWall }) {
+function EdgeWalls({ edges, walls, doors, windows, pictures, isSelected, color, selectedWallKey, onSelectWall }) {
   return edges.filter((edge) => walls[edge.key]).map((edge) => {
     const dx = edge.to.x - edge.from.x
     const dy = edge.to.y - edge.from.y
@@ -182,7 +203,9 @@ function EdgeWalls({ edges, walls, doors, windows, isSelected, color, selectedWa
 
     const wallDoors = doors.filter((d) => d.wall === edge.key)
     const wallWindows = windows.filter((w) => w.wall === edge.key)
+    const wallPictures = pictures.filter((p) => p.wall === edge.key)
     const solids = solidWallStretches(lengthPx, wallDoors)
+    const angleDeg = (Math.atan2(dy, dx) * 180) / Math.PI
 
     return (
       <Group key={edge.key}>
@@ -257,6 +280,26 @@ function EdgeWalls({ edges, walls, doors, windows, isSelected, color, selectedWa
             />
           )
         })}
+
+        {wallPictures.map((pic) => {
+          const w = Math.min(pic.width * SCALE, lengthPx)
+          const start = Math.max(0, pic.offset * lengthPx - w / 2)
+          const [sx, sy] = toPoint(start)
+          return (
+            <Rect
+              key={pic.id}
+              x={sx}
+              y={sy}
+              width={w}
+              height={PICTURE_MARKER_DEPTH}
+              rotation={angleDeg}
+              fill={color.picture}
+              stroke={color.text}
+              strokeWidth={1}
+              listening={false}
+            />
+          )
+        })}
       </Group>
     )
   })
@@ -269,6 +312,7 @@ function LRoomWalls({ room, pixelW, pixelH, pixelNW, pixelNH, isSelected, color,
       walls={room.walls ?? DEFAULT_L_WALLS}
       doors={room.doors ?? []}
       windows={room.windows ?? []}
+      pictures={room.pictures ?? []}
       isSelected={isSelected}
       color={color}
       selectedWallKey={selectedWallKey}
@@ -284,6 +328,7 @@ function QuadRoomWalls({ room, pixelCorners, isSelected, color, selectedWallKey,
       walls={room.walls ?? DEFAULT_WALLS}
       doors={room.doors ?? []}
       windows={room.windows ?? []}
+      pictures={room.pictures ?? []}
       isSelected={isSelected}
       color={color}
       selectedWallKey={selectedWallKey}
@@ -370,6 +415,26 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
               stroke={color.muted}
               strokeWidth={1.5}
               dash={[3, 3]}
+              listening={false}
+            />
+          )
+        })}
+
+        {(wall.pictures ?? []).map((pic) => {
+          const w = Math.min(pic.width * SCALE, lengthPx)
+          const start = Math.max(0, pic.offset * lengthPx - w / 2)
+          const [sx, sy] = toPoint(start)
+          return (
+            <Rect
+              key={pic.id}
+              x={sx}
+              y={sy}
+              width={w}
+              height={PICTURE_MARKER_DEPTH}
+              rotation={(Math.atan2(dy, dx) * 180) / Math.PI}
+              fill={color.picture}
+              stroke={color.text}
+              strokeWidth={1}
               listening={false}
             />
           )

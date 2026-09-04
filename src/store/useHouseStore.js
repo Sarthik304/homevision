@@ -14,6 +14,24 @@ function mapWall(rooms, roomId, wallId, fn) {
   )
 }
 
+const DEFAULT_PICTURE_WIDTH = 0.6 // meters
+const DEFAULT_PICTURE_HEIGHT = 0.4 // meters
+const DEFAULT_PICTURE_BOTTOM = 1.2 // meters off the floor to the frame's bottom edge
+
+// a framed picture hung on a wall from an uploaded image; `wall` is only set for boundary walls —
+// an interior wall's pictures live in its own `pictures` array, same as its doors/windows
+function createPicture(wall, src) {
+  return {
+    id: nextId(),
+    ...(wall !== undefined ? { wall } : {}),
+    offset: 0.5,
+    width: DEFAULT_PICTURE_WIDTH,
+    height: DEFAULT_PICTURE_HEIGHT,
+    bottom: DEFAULT_PICTURE_BOTTOM,
+    src,
+  }
+}
+
 const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
 const ADJACENCY_TOLERANCE = 0.05 // meters, max gap to count two boundary walls as flush/shared
 
@@ -124,6 +142,7 @@ function createRoom(namePrefix, count, viewCenter, { floorColor, walls, shape })
     wallColors: {},
     doors: [],
     windows: [],
+    pictures: [],
     interiorWalls: [],
     furniture: [],
   }
@@ -144,6 +163,7 @@ const useHouseStore = create((set) => ({
       wallColors: {},
       doors: [],
       windows: [],
+      pictures: [],
       interiorWalls: [],
       furniture: [],
     },
@@ -160,6 +180,7 @@ const useHouseStore = create((set) => ({
       wallColors: {},
       doors: [],
       windows: [],
+      pictures: [],
       interiorWalls: [],
       furniture: [],
     },
@@ -491,6 +512,34 @@ const useHouseStore = create((set) => ({
       ),
     })),
 
+  // hangs an uploaded image on a boundary wall as a framed picture
+  addPicture: (roomId, wall, src) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, pictures: [...(room.pictures ?? []), createPicture(wall, src)] }
+          : room
+      ),
+    })),
+
+  updatePicture: (roomId, pictureId, updates) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, pictures: (room.pictures ?? []).map((p) => (p.id === pictureId ? { ...p, ...updates } : p)) }
+          : room
+      ),
+    })),
+
+  removePicture: (roomId, pictureId) =>
+    set((state) => ({
+      rooms: state.rooms.map((room) =>
+        room.id === roomId
+          ? { ...room, pictures: (room.pictures ?? []).filter((p) => p.id !== pictureId) }
+          : room
+      ),
+    })),
+
   addInteriorWall: (roomId) =>
     set((state) => ({
       rooms: state.rooms.map((room) => {
@@ -508,6 +557,7 @@ const useHouseStore = create((set) => ({
               thickness: 0.1,
               doors: [],
               windows: [],
+              pictures: [],
             },
           ],
         }
@@ -583,6 +633,30 @@ const useHouseStore = create((set) => ({
       rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
         ...w,
         windows: w.windows.filter((win) => win.id !== windowId),
+      })),
+    })),
+
+  addInteriorPicture: (roomId, wallId, src) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        pictures: [...(w.pictures ?? []), createPicture(undefined, src)],
+      })),
+    })),
+
+  updateInteriorPicture: (roomId, wallId, pictureId, updates) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        pictures: (w.pictures ?? []).map((p) => (p.id === pictureId ? { ...p, ...updates } : p)),
+      })),
+    })),
+
+  removeInteriorPicture: (roomId, wallId, pictureId) =>
+    set((state) => ({
+      rooms: mapWall(state.rooms, roomId, wallId, (w) => ({
+        ...w,
+        pictures: (w.pictures ?? []).filter((p) => p.id !== pictureId),
       })),
     })),
 

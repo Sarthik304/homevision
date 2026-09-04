@@ -1,11 +1,11 @@
-import { useMemo, useRef } from 'react'
-import { Plane, Shape, Vector3 } from 'three'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plane, SRGBColorSpace, Shape, TextureLoader, Vector3 } from 'three'
 import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../../constants/quad'
-import { getLWallDefs, getQuadWallDefs, getRectWallDefs, WALL_THICKNESS } from '../../utils/wallGeometry'
+import { getLWallDefs, getQuadWallDefs, getRectWallDefs, wallInwardSign, WALL_THICKNESS } from '../../utils/wallGeometry'
 
 const WALL_HEIGHT = 3
 const DOOR_HEIGHT = 2.1
@@ -250,13 +250,66 @@ function buildPolygonShape(points, width, height, flipY) {
   return shape
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, doors, windows }) {
+// loads an uploaded image (a data URL) as a texture; manual instead of drei's useTexture since
+// the Canvas here isn't wrapped in a Suspense boundary
+function usePictureTexture(src) {
+  const [texture, setTexture] = useState(null)
+
+  useEffect(() => {
+    if (!src) {
+      setTexture(null)
+      return undefined
+    }
+    let cancelled = false
+    new TextureLoader().load(src, (tex) => {
+      if (cancelled) return
+      tex.colorSpace = SRGBColorSpace
+      setTexture(tex)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [src])
+
+  return texture
+}
+
+const PICTURE_FRAME_MARGIN = 0.04 // meters, how far the frame border extends past the image on each side
+const PICTURE_FRAME_DEPTH = 0.03
+const PICTURE_FRAME_COLOR = '#4a3524'
+
+// a framed picture hung flush against a wall's room-facing surface, at `offset` along its length
+// (same 0-1 convention as doors/windows) and `bottom` meters up from the floor
+function PictureFrame({ picture, length, thickness, insideSign }) {
+  const texture = usePictureTexture(picture.src)
+  const localX = picture.offset * length - length / 2
+  const localY = picture.bottom + picture.height / 2
+  const localZ = insideSign * (thickness / 2 + PICTURE_FRAME_DEPTH / 2)
+
+  return (
+    <group position={[localX, localY, localZ]} rotation={[0, insideSign > 0 ? 0 : Math.PI, 0]}>
+      <mesh>
+        <boxGeometry args={[picture.width + PICTURE_FRAME_MARGIN, picture.height + PICTURE_FRAME_MARGIN, PICTURE_FRAME_DEPTH]} />
+        <meshStandardMaterial color={PICTURE_FRAME_COLOR} />
+      </mesh>
+      {texture && (
+        <mesh position={[0, 0, PICTURE_FRAME_DEPTH / 2 + 0.001]}>
+          <planeGeometry args={[picture.width, picture.height]} />
+          <meshStandardMaterial map={texture} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, doors, windows, pictures }) {
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(
     () => clipSegments(buildSolidSegments(length, openings), trimStart, trimEnd, length),
     [length, openings, trimStart, trimEnd]
   )
   const windowOpenings = openings.filter((o) => o.type === 'window')
+  const insideSign = useMemo(() => wallInwardSign(position, rotation[1]), [position, rotation])
   const lastClickRef = useRef(0)
 
   const handleClick = (e) => {
@@ -302,6 +355,10 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
           <meshStandardMaterial color={glassColor} transparent opacity={0.35} />
         </mesh>
       ))}
+
+      {pictures.map((pic) => (
+        <PictureFrame key={pic.id} picture={pic} length={length} thickness={thickness} insideSign={insideSign} />
+      ))}
     </group>
   )
 }
@@ -319,6 +376,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   const walls = room.walls ?? DEFAULT_WALLS
   const doors = room.doors ?? []
   const windows = room.windows ?? []
+  const pictures = room.pictures ?? []
   const anyWalls = Object.values(walls).some(Boolean)
 
   const posX = x + width / 2
@@ -388,6 +446,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             onWallColorPick={onWallColorPick}
             doors={doors.filter((d) => d.wall === w.key)}
             windows={windows.filter((win) => win.wall === w.key)}
+            pictures={pictures.filter((p) => p.wall === w.key)}
           />
         ))}
 
@@ -418,6 +477,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             onWallColorPick={onWallColorPick}
             doors={wall.doors ?? []}
             windows={wall.windows ?? []}
+            pictures={wall.pictures ?? []}
           />
         )
       })}

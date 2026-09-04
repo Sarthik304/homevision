@@ -399,3 +399,44 @@ describe('quad room shapes', () => {
     expect(getRoom(BEDROOM_ID).doors).toHaveLength(0)
   })
 })
+
+describe('pictures on a boundary wall', () => {
+  it('adds a picture with sane defaults and the given wall/src, never mirrored to a neighbor', () => {
+    useHouseStore.getState().addPicture(LIVING_ROOM_ID, 'right', 'data:image/png;base64,AAA')
+
+    const [pic] = getRoom(LIVING_ROOM_ID).pictures
+    expect(pic).toMatchObject({ wall: 'right', src: 'data:image/png;base64,AAA', offset: 0.5 })
+    expect(pic.width).toBeGreaterThan(0)
+    expect(pic.height).toBeGreaterThan(0)
+    expect(getRoom(BEDROOM_ID).pictures).toHaveLength(0)
+  })
+
+  it('updates and removes a picture by id', () => {
+    useHouseStore.getState().addPicture(LIVING_ROOM_ID, 'top', 'data:image/png;base64,AAA')
+    const id = getRoom(LIVING_ROOM_ID).pictures[0].id
+
+    useHouseStore.getState().updatePicture(LIVING_ROOM_ID, id, { offset: 0.2, width: 1 })
+    expect(getRoom(LIVING_ROOM_ID).pictures[0]).toMatchObject({ offset: 0.2, width: 1 })
+
+    useHouseStore.getState().removePicture(LIVING_ROOM_ID, id)
+    expect(getRoom(LIVING_ROOM_ID).pictures).toHaveLength(0)
+  })
+})
+
+describe('pictures on an interior wall', () => {
+  it('adds, updates, and removes a picture scoped to one interior wall', () => {
+    useHouseStore.getState().addInteriorWall(LIVING_ROOM_ID)
+    const wallId = getRoom(LIVING_ROOM_ID).interiorWalls[0].id
+
+    useHouseStore.getState().addInteriorPicture(LIVING_ROOM_ID, wallId, 'data:image/png;base64,BBB')
+    const pic = getRoom(LIVING_ROOM_ID).interiorWalls[0].pictures[0]
+    expect(pic).toMatchObject({ src: 'data:image/png;base64,BBB', offset: 0.5 })
+    expect(pic.wall).toBeUndefined()
+
+    useHouseStore.getState().updateInteriorPicture(LIVING_ROOM_ID, wallId, pic.id, { bottom: 1.8 })
+    expect(getRoom(LIVING_ROOM_ID).interiorWalls[0].pictures[0].bottom).toBe(1.8)
+
+    useHouseStore.getState().removeInteriorPicture(LIVING_ROOM_ID, wallId, pic.id)
+    expect(getRoom(LIVING_ROOM_ID).interiorWalls[0].pictures).toHaveLength(0)
+  })
+})

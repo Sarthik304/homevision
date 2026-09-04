@@ -7,10 +7,11 @@ import Room3D from './Room3D'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { eventClientXY } from '../../utils/pointerPosition'
+import DimensionInput from '../ui/DimensionInput'
 
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
-const POPUP_HEIGHT = 250
+const POPUP_HEIGHT = 460
 // hoisted so Canvas's `camera` prop keeps a stable reference across renders
 const INITIAL_CAMERA = { position: [20, 20, 20], fov: 50, near: 0.1, far: 1000 }
 // debounces Canvas's resize-triggered reconnect, which was dropping OrbitControls mid-setup
@@ -33,6 +34,103 @@ function PipetteIcon() {
   )
 }
 
+// hidden file input behind a normal button, so "upload" looks and behaves like any other action
+function UploadPictureButton({ onFile, label, style }) {
+  const inputRef = useRef(null)
+
+  const handleChange = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so choosing the same file again still fires onChange
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => onFile(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <>
+      <button type="button" className="pixel-btn" onClick={() => inputRef.current?.click()} style={style}>
+        {label}
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleChange} style={{ display: 'none' }} />
+    </>
+  )
+}
+
+// one uploaded picture already hanging on the wall the popup is currently open for
+function PictureItemRow({ item, onUpdate, onRemove, color, unit }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 5,
+        fontSize: 12,
+        background: color.surface,
+        borderRadius: radius.sm,
+        padding: '6px 8px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <img
+          src={item.src}
+          alt=""
+          style={{ width: 28, height: 28, objectFit: 'cover', borderRadius: radius.sm, border: `1px solid ${color.border}`, flexShrink: 0 }}
+        />
+        <span style={{ color: color.muted, fontSize: 11 }}>W</span>
+        <DimensionInput
+          valueMeters={item.width}
+          unit={unit}
+          min={0.1}
+          onCommit={(meters) => onUpdate(item.id, { width: meters })}
+          style={{ width: 40, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+        />
+        <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+        <DimensionInput
+          valueMeters={item.height}
+          unit={unit}
+          min={0.1}
+          onCommit={(meters) => onUpdate(item.id, { height: meters })}
+          style={{ width: 40, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+        />
+        <button
+          onClick={() => onRemove(item.id)}
+          aria-label="Remove picture"
+          style={{ background: 'transparent', border: 'none', color: color.danger, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: color.muted, fontSize: 11 }}>Off floor</span>
+        <DimensionInput
+          valueMeters={item.bottom}
+          unit={unit}
+          min={0}
+          onCommit={(meters) => onUpdate(item.id, { bottom: meters })}
+          style={{ width: 48, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }}
+        />
+        <span style={{ color: color.muted, fontSize: 10 }}>{unit}</span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: color.muted, fontSize: 10 }}>Start</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={item.offset}
+          onChange={(e) => onUpdate(item.id, { offset: parseFloat(e.target.value) })}
+          style={{ flex: 1, accentColor: color.brand }}
+        />
+        <span style={{ color: color.muted, fontSize: 10 }}>End</span>
+      </div>
+    </div>
+  )
+}
+
 // state selector for useShallow
 const selectHouseViewerState = (s) => ({
   rooms: s.rooms,
@@ -42,7 +140,14 @@ const selectHouseViewerState = (s) => ({
   selectInteriorWall: s.selectInteriorWall,
   updateWallColor: s.updateWallColor,
   updateInteriorWall: s.updateInteriorWall,
+  addPicture: s.addPicture,
+  updatePicture: s.updatePicture,
+  removePicture: s.removePicture,
+  addInteriorPicture: s.addInteriorPicture,
+  updateInteriorPicture: s.updateInteriorPicture,
+  removeInteriorPicture: s.removeInteriorPicture,
   darkMode: s.darkMode,
+  unit: s.unit,
 })
 
 export default function HouseViewer() {
@@ -54,7 +159,14 @@ export default function HouseViewer() {
     selectInteriorWall,
     updateWallColor,
     updateInteriorWall,
+    addPicture,
+    updatePicture,
+    removePicture,
+    addInteriorPicture,
+    updateInteriorPicture,
+    removeInteriorPicture,
     darkMode,
+    unit,
   } = useHouseStore(useShallow(selectHouseViewerState))
   const color = getColors(darkMode)
   const containerRef = useRef(null)
@@ -122,6 +234,15 @@ export default function HouseViewer() {
 
   const activeRoom = colorPicker ? rooms.find((r) => r.id === colorPicker.roomId) : null
   const activeColor = activeRoom ? getWallColor(activeRoom, colorPicker.kind, colorPicker.key) : '#ffffff'
+  const activeInteriorWall =
+    activeRoom && colorPicker?.kind === 'interior'
+      ? activeRoom.interiorWalls?.find((w) => w.id === colorPicker.key)
+      : null
+  const activeWallPictures = !activeRoom
+    ? []
+    : colorPicker.kind === 'boundary'
+      ? (activeRoom.pictures ?? []).filter((p) => p.wall === colorPicker.key)
+      : (activeInteriorWall?.pictures ?? [])
 
   const handleColorChange = (c) => {
     if (!colorPicker) return
@@ -137,6 +258,24 @@ export default function HouseViewer() {
     if (!sourceRoom) return
     handleColorChange(getWallColor(sourceRoom, kind, key))
     setPickMode(false)
+  }
+
+  const handleUploadPicture = (src) => {
+    if (!colorPicker) return
+    if (colorPicker.kind === 'boundary') addPicture(colorPicker.roomId, colorPicker.key, src)
+    else addInteriorPicture(colorPicker.roomId, colorPicker.key, src)
+  }
+
+  const handleUpdatePicture = (pictureId, updates) => {
+    if (!colorPicker) return
+    if (colorPicker.kind === 'boundary') updatePicture(colorPicker.roomId, pictureId, updates)
+    else updateInteriorPicture(colorPicker.roomId, colorPicker.key, pictureId, updates)
+  }
+
+  const handleRemovePicture = (pictureId) => {
+    if (!colorPicker) return
+    if (colorPicker.kind === 'boundary') removePicture(colorPicker.roomId, pictureId)
+    else removeInteriorPicture(colorPicker.roomId, colorPicker.key, pictureId)
   }
 
   return (
@@ -224,6 +363,8 @@ export default function HouseViewer() {
             left: colorPicker.x,
             top: colorPicker.y,
             width: POPUP_WIDTH,
+            maxHeight: '80vh',
+            overflowY: 'auto',
             background: color.bg,
             border: `1.5px solid ${color.text}`,
             borderRadius: radius.md,
@@ -280,6 +421,42 @@ export default function HouseViewer() {
             </div>
           </div>
           <HexColorPicker color={activeColor} onChange={handleColorChange} style={{ width: '100%' }} />
+
+          <div style={{ height: 1, background: color.border, margin: '10px 0' }} />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>Pictures</span>
+            <UploadPictureButton
+              onFile={handleUploadPicture}
+              label="+ Upload"
+              style={{
+                padding: '4px 10px',
+                background: color.brand,
+                border: `1px solid ${color.brand}`,
+                borderRadius: radius.sm,
+                color: '#fff',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+              }}
+            />
+          </div>
+
+          {activeWallPictures.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {activeWallPictures.map((pic) => (
+                <PictureItemRow
+                  key={pic.id}
+                  item={pic}
+                  onUpdate={handleUpdatePicture}
+                  onRemove={handleRemovePicture}
+                  color={color}
+                  unit={unit}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

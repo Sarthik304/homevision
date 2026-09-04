@@ -39,6 +39,17 @@ export function getLWallDefs(width, height, notchWidth, notchHeight) {
   })
 }
 
+// which local-Z side of a wall (already positioned/rotated relative to the room's own center) faces
+// into the room — used to mount wall-hung items (pictures) on the room-facing surface for any wall
+// shape and its own rotation convention, without hardcoding a sign per wall key
+export function wallInwardSign(position, rotationY) {
+  const [px, , pz] = position
+  const sin = Math.sin(rotationY)
+  const cos = Math.cos(rotationY)
+  const distSq = (s) => (px + s * sin) ** 2 + (pz + s * cos) ** 2
+  return distSq(1) <= distSq(-1) ? 1 : -1
+}
+
 // same wall-def shape as getRectWallDefs, derived from a quad's 4 corners — left untrimmed since a fixed trim only suits 90° corners, so adjacent walls overlap slightly rather than risk a gap
 export function getQuadWallDefs(corners, width, height) {
   return getQuadEdges(corners)

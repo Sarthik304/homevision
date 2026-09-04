@@ -14,6 +14,7 @@ export const lightColors = {
   gridSection: '#D4D4D4',
   window: '#8ecae6',
   glass: '#bfe3f0',
+  picture: '#b5834f',
 }
 
 export const darkColors = {
@@ -32,6 +33,7 @@ export const darkColors = {
   gridSection: '#38383F',
   window: '#5fb4dd',
   glass: '#3a5f70',
+  picture: '#c99a63',
 }
 
 export function getColors(darkMode) {

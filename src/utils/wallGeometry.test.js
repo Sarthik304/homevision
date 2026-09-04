@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getLEdges } from '../constants/lshape'
 import { getQuadEdges } from '../constants/quad'
-import { getLWallDefs, getQuadWallDefs, getRectWallDefs, WALL_THICKNESS } from './wallGeometry'
+import { getLWallDefs, getQuadWallDefs, getRectWallDefs, wallInwardSign, WALL_THICKNESS } from './wallGeometry'
 
 // Same rotation convention getLWallDefs relies on (three.js's RotationY matrix): every wall's
 // rotation here is an exact multiple of 90° (since L-shape edges are always axis-aligned), so
@@ -219,5 +219,29 @@ describe('getQuadWallDefs', () => {
       expect(end.x).toBeCloseTo(edge.to.x, 0)
       expect(end.y).toBeCloseTo(edge.to.y, 0)
     })
+  })
+})
+
+describe('wallInwardSign', () => {
+  it('picks the local-Z side of each rect wall that faces the room center, for every wall key', () => {
+    const defs = getRectWallDefs(10, 8)
+    const byKey = Object.fromEntries(defs.map((d) => [d.key, d]))
+    // verified by hand: getRectWallDefs special-cases top/bottom/left/right rotations rather
+    // than deriving them from edge direction, so the inward sign isn't the same for every key
+    expect(wallInwardSign(byKey.top.position, byKey.top.rotation[1])).toBe(1)
+    expect(wallInwardSign(byKey.bottom.position, byKey.bottom.rotation[1])).toBe(-1)
+    expect(wallInwardSign(byKey.left.position, byKey.left.rotation[1])).toBe(-1)
+    expect(wallInwardSign(byKey.right.position, byKey.right.rotation[1])).toBe(1)
+  })
+
+  it('agrees for the equivalent edge-based L-shape walls (no notch, so effectively a plain rect)', () => {
+    // built via the general edge-direction rotation formula instead of getRectWallDefs' special
+    // case — a consistently-wound polygon should put every edge's inward side at the same sign
+    const defs = getLWallDefs(10, 8, 0, 0)
+    const byKey = Object.fromEntries(defs.map((d) => [d.key, d]))
+    expect(wallInwardSign(byKey.top.position, byKey.top.rotation[1])).toBe(1)
+    expect(wallInwardSign(byKey.bottom.position, byKey.bottom.rotation[1])).toBe(1)
+    expect(wallInwardSign(byKey.left.position, byKey.left.rotation[1])).toBe(1)
+    expect(wallInwardSign(byKey.right.position, byKey.right.rotation[1])).toBe(1)
   })
 })
