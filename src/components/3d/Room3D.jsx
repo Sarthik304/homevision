@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plane, SRGBColorSpace, Shape, TextureLoader, Vector3 } from 'three'
+import { Plane, Quaternion, SRGBColorSpace, Shape, TextureLoader, Vector3 } from 'three'
 import { Edges } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../../constants/quad'
 import { getLWallDefs, getQuadWallDefs, getRectWallDefs, wallInwardSign, WALL_THICKNESS } from '../../utils/wallGeometry'
+import {
+  movePictureToPoint,
+  pictureCenterX,
+  pictureGrabOffset,
+  pictureOppositeCorner,
+  resizePictureToPoint,
+} from '../../utils/pictureGeometry'
 
 const WALL_HEIGHT = 3
 const DOOR_HEIGHT = 2.1
@@ -277,32 +284,143 @@ function usePictureTexture(src) {
 const PICTURE_FRAME_MARGIN = 0.04 // meters, how far the frame border extends past the image on each side
 const PICTURE_FRAME_DEPTH = 0.03
 const PICTURE_FRAME_COLOR = '#4a3524'
+const PICTURE_HANDLE_RADIUS = 0.05
 
 // a framed picture hung flush against a wall's room-facing surface, at `offset` along its length
-// (same 0-1 convention as doors/windows) and `bottom` meters up from the floor
-function PictureFrame({ picture, length, thickness, insideSign }) {
+// (same 0-1 convention as doors/windows) and `bottom` meters up from the floor. Drag the frame
+// itself to reposition it, or one of its 4 corners to resize it (keeping the opposite corner
+// fixed) — same conventions furniture's own move/corner-resize already use, just projected into
+// the wall's own plane instead of the floor plane.
+function PictureFrame({ picture, length, thickness, insideSign, wallGroupRef, roomId, wallKind, wallKey, onDragChange }) {
   const texture = usePictureTexture(picture.src)
-  const localX = picture.offset * length - length / 2
-  const localY = picture.bottom + picture.height / 2
+  const updatePicture = useHouseStore((s) => s.updatePicture)
+  const updateInteriorPicture = useHouseStore((s) => s.updateInteriorPicture)
+  const resizeRef = useRef(null)
+  const moveRef = useRef(null)
+
+  const centerX = pictureCenterX(picture, length)
+  const centerY = picture.bottom + picture.height / 2
   const localZ = insideSign * (thickness / 2 + PICTURE_FRAME_DEPTH / 2)
+  const handleZ = insideSign * (thickness / 2 + PICTURE_FRAME_DEPTH + 0.02)
+
+  const commitUpdate = (updates) => {
+    if (wallKind === 'boundary') updatePicture(roomId, picture.id, updates)
+    else updateInteriorPicture(roomId, wallKey, picture.id, updates)
+  }
+
+  // the wall's own plane in world space, used to turn pointer rays into points on it
+  const wallPlane = () => {
+    const worldPos = new Vector3()
+    wallGroupRef.current.getWorldPosition(worldPos)
+    const worldQuat = new Quaternion()
+    wallGroupRef.current.getWorldQuaternion(worldQuat)
+    const normal = new Vector3(0, 0, 1).applyQuaternion(worldQuat)
+    return new Plane().setFromNormalAndCoplanarPoint(normal, worldPos)
+  }
+
+  const pointerToWallLocal = (e, plane) => {
+    const point = new Vector3()
+    if (!e.ray.intersectPlane(plane, point)) return null
+    return wallGroupRef.current.worldToLocal(point.clone())
+  }
+
+  const startResize = (cornerKey) => (e) => {
+    e.stopPropagation()
+    e.target.setPointerCapture(e.pointerId)
+    resizeRef.current = { plane: wallPlane(), anchor: pictureOppositeCorner(picture, centerX, cornerKey) }
+    onDragChange(true)
+  }
+
+  const moveResize = (e) => {
+    if (!resizeRef.current) return
+    e.stopPropagation()
+    const local = pointerToWallLocal(e, resizeRef.current.plane)
+    if (!local) return
+    commitUpdate(resizePictureToPoint(resizeRef.current.anchor, local, length))
+  }
+
+  const endResize = (e) => {
+    if (!resizeRef.current) return
+    e.stopPropagation()
+    resizeRef.current = null
+    onDragChange(false)
+  }
+
+  const startMove = (e) => {
+    e.stopPropagation()
+    e.target.setPointerCapture(e.pointerId)
+    const plane = wallPlane()
+    const local = pointerToWallLocal(e, plane)
+    if (!local) return
+    moveRef.current = { plane, grabOffset: pictureGrabOffset(picture, centerX, local) }
+    onDragChange(true)
+  }
+
+  const moveMove = (e) => {
+    if (!moveRef.current) return
+    e.stopPropagation()
+    const local = pointerToWallLocal(e, moveRef.current.plane)
+    if (!local) return
+    commitUpdate(movePictureToPoint(local, moveRef.current.grabOffset, picture, length))
+  }
+
+  const endMove = (e) => {
+    if (!moveRef.current) return
+    e.stopPropagation()
+    moveRef.current = null
+    onDragChange(false)
+  }
+
+  const corners = ['tl', 'tr', 'bl', 'br'].map((key) => ({
+    key,
+    x: key.endsWith('l') ? centerX - picture.width / 2 : centerX + picture.width / 2,
+    y: key.startsWith('t') ? picture.bottom + picture.height : picture.bottom,
+  }))
 
   return (
-    <group position={[localX, localY, localZ]} rotation={[0, insideSign > 0 ? 0 : Math.PI, 0]}>
-      <mesh>
-        <boxGeometry args={[picture.width + PICTURE_FRAME_MARGIN, picture.height + PICTURE_FRAME_MARGIN, PICTURE_FRAME_DEPTH]} />
-        <meshStandardMaterial color={PICTURE_FRAME_COLOR} />
-      </mesh>
-      {texture && (
-        <mesh position={[0, 0, PICTURE_FRAME_DEPTH / 2 + 0.001]}>
-          <planeGeometry args={[picture.width, picture.height]} />
-          <meshStandardMaterial map={texture} />
+    <>
+      <group
+        position={[centerX, centerY, localZ]}
+        rotation={[0, insideSign > 0 ? 0 : Math.PI, 0]}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <mesh onPointerDown={startMove} onPointerMove={moveMove} onPointerUp={endMove} onPointerCancel={endMove}>
+          <boxGeometry args={[picture.width + PICTURE_FRAME_MARGIN, picture.height + PICTURE_FRAME_MARGIN, PICTURE_FRAME_DEPTH]} />
+          <meshStandardMaterial color={PICTURE_FRAME_COLOR} />
         </mesh>
-      )}
-    </group>
+        {texture && (
+          <mesh
+            position={[0, 0, PICTURE_FRAME_DEPTH / 2 + 0.001]}
+            onPointerDown={startMove}
+            onPointerMove={moveMove}
+            onPointerUp={endMove}
+            onPointerCancel={endMove}
+          >
+            <planeGeometry args={[picture.width, picture.height]} />
+            <meshStandardMaterial map={texture} />
+          </mesh>
+        )}
+      </group>
+
+      {corners.map(({ key, x, y }) => (
+        <mesh
+          key={key}
+          position={[x, y, handleZ]}
+          onPointerDown={startResize(key)}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+        >
+          <sphereGeometry args={[PICTURE_HANDLE_RADIUS, 12, 12]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
+      ))}
+    </>
   )
 }
 
-function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, doors, windows, pictures }) {
+function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNESS, trimStart = 0, trimEnd = 0, color, glassColor, roomId, wallKind, wallKey, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, doors, windows, pictures, onPictureDragChange }) {
+  const wallGroupRef = useRef(null)
   const openings = useMemo(() => computeOpenings(length, doors, windows), [length, doors, windows])
   const segments = useMemo(
     () => clipSegments(buildSolidSegments(length, openings), trimStart, trimEnd, length),
@@ -333,7 +451,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   }
 
   return (
-    <group position={position} rotation={rotation}>
+    <group ref={wallGroupRef} position={position} rotation={rotation}>
       {segments.map((seg, i) => (
         <mesh
           key={i}
@@ -357,13 +475,24 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
       ))}
 
       {pictures.map((pic) => (
-        <PictureFrame key={pic.id} picture={pic} length={length} thickness={thickness} insideSign={insideSign} />
+        <PictureFrame
+          key={pic.id}
+          picture={pic}
+          length={length}
+          thickness={thickness}
+          insideSign={insideSign}
+          wallGroupRef={wallGroupRef}
+          roomId={roomId}
+          wallKind={wallKind}
+          wallKey={wallKey}
+          onDragChange={onPictureDragChange}
+        />
       ))}
     </group>
   )
 }
 
-export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange }) {
+export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange, onPictureDragChange }) {
   const darkMode = useHouseStore((s) => s.darkMode)
   const selectedFurnitureId = useHouseStore((s) => s.selectedFurnitureId)
   const palette = getColors(darkMode)
@@ -447,6 +576,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             doors={doors.filter((d) => d.wall === w.key)}
             windows={windows.filter((win) => win.wall === w.key)}
             pictures={pictures.filter((p) => p.wall === w.key)}
+            onPictureDragChange={onPictureDragChange}
           />
         ))}
 
@@ -478,6 +608,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             doors={wall.doors ?? []}
             windows={wall.windows ?? []}
             pictures={wall.pictures ?? []}
+            onPictureDragChange={onPictureDragChange}
           />
         )
       })}
