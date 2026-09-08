@@ -57,8 +57,8 @@ describe('importedLayoutToHouseRooms', () => {
     })
     expect(rooms[0].width).toBe(MIN_ROOM_SIZE)
     expect(rooms[0].height).toBe(MIN_ROOM_SIZE)
-    expect(rooms[1].x).toBe(0)
-    expect(rooms[1].y).toBe(0)
+    expect(Number.isFinite(rooms[1].x)).toBe(true)
+    expect(Number.isFinite(rooms[1].y)).toBe(true)
     expect(rooms[1].width).toBeGreaterThanOrEqual(MIN_ROOM_SIZE)
     expect(rooms[1].height).toBeGreaterThanOrEqual(MIN_ROOM_SIZE)
   })
@@ -89,6 +89,19 @@ describe('importedLayoutToHouseRooms', () => {
     })
     expect(rooms[0].x).toBe(0)
     expect(rooms[1].x).toBe(5)
+  })
+
+  it('pushes apart two overlapping rooms until they no longer overlap', () => {
+    const rooms = importedLayoutToHouseRooms({
+      rooms: [
+        { name: 'A', x: 0, y: 0, width: 4, height: 3 },
+        { name: 'B', x: 2, y: 0, width: 4, height: 3 },
+      ],
+    })
+    const [a, b] = rooms
+    const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
+    const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+    expect(overlapX <= 0 || overlapY <= 0).toBe(true)
   })
 
   it('marks a room with hasWalls: false as an open floor with no walls', () => {

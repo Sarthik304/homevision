@@ -24,6 +24,48 @@ function overlapLength(aStart, aEnd, bStart, bEnd) {
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart))
 }
 
+const OVERLAP_RESOLVE_ITERATIONS = 8
+
+// the model sometimes places a room (often a hallway) so it genuinely overlaps its neighbors —
+// push overlapping pairs apart along whichever axis needs the smaller move, splitting the move
+// evenly between the two. Repeats a few times since separating one pair can create a new overlap
+// with a third room; a handful of passes is enough to converge for the small room counts this
+// endpoint ever returns.
+function resolveOverlaps(rooms) {
+  const working = rooms.map((room) => ({ ...room }))
+
+  for (let iteration = 0; iteration < OVERLAP_RESOLVE_ITERATIONS; iteration++) {
+    let foundOverlap = false
+
+    for (let i = 0; i < working.length; i++) {
+      for (let j = i + 1; j < working.length; j++) {
+        const a = working[i]
+        const b = working[j]
+        const overlapX = overlapLength(a.x, a.x + a.width, b.x, b.x + b.width)
+        const overlapY = overlapLength(a.y, a.y + a.height, b.y, b.y + b.height)
+        if (overlapX <= 0 || overlapY <= 0) continue
+
+        foundOverlap = true
+        if (overlapX < overlapY) {
+          const push = overlapX / 2
+          const direction = a.x <= b.x ? 1 : -1
+          a.x -= push * direction
+          b.x += push * direction
+        } else {
+          const push = overlapY / 2
+          const direction = a.y <= b.y ? 1 : -1
+          a.y -= push * direction
+          b.y += push * direction
+        }
+      }
+    }
+
+    if (!foundOverlap) break
+  }
+
+  return working
+}
+
 // nudges each room toward any neighbor it's almost touching, closing small gaps left by the
 // model's imprecise coordinate estimates. Only ever moves a room (never resizes it), and only by
 // small, capped amounts, so labeled dimensions are preserved.
@@ -116,5 +158,5 @@ function toHouseRoom(rawRoom, index) {
 export function importedLayoutToHouseRooms(layout) {
   const rawRooms = Array.isArray(layout?.rooms) ? layout.rooms : []
   const rooms = rawRooms.map((room, i) => toHouseRoom(room, i))
-  return snapAdjacentRooms(rooms)
+  return snapAdjacentRooms(resolveOverlaps(rooms))
 }
