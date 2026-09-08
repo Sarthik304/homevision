@@ -6,6 +6,7 @@ import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import DesignsPanel from '../auth/DesignsPanel'
 import OpenDesignModal from './OpenDesignModal'
+import ImportPhotoModal from './ImportPhotoModal'
 import { getColors, radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
 import { UNIT_OPTIONS } from '../../utils/units'
@@ -40,7 +41,7 @@ export default function Navbar() {
     useShallow((s) => ({ activeDesignId: s.activeDesignId, designs: s.designs, fetchDesigns: s.fetchDesigns }))
   )
   const color = getColors(darkMode)
-  const [modal, setModal] = useState(null) // null | 'auth' | 'designs' | 'open-design'
+  const [modal, setModal] = useState(null) // null | 'auth' | 'designs' | 'open-design' | 'import-photo'
   const isMobile = useIsMobile()
   const [menuOpen, setMenuOpen] = useState(false)
   const [unitMenuOpen, setUnitMenuOpen] = useState(false)
@@ -144,6 +145,15 @@ export default function Navbar() {
         style={secondaryBtn}
       >
         Open design
+      </button>
+
+      <button
+        className="pixel-btn"
+        onClick={() => openModalFromMenu('import-photo')}
+        title="Generate a layout from a floor plan photo"
+        style={secondaryBtn}
+      >
+        Import from photo
       </button>
 
       {!initializing && (
@@ -344,6 +354,7 @@ export default function Navbar() {
       {modal === 'auth' && <AuthModal onClose={() => setModal(null)} color={color} />}
       {modal === 'designs' && user && <DesignsPanel onClose={() => setModal(null)} color={color} />}
       {modal === 'open-design' && <OpenDesignModal onClose={() => setModal(null)} color={color} />}
+      {modal === 'import-photo' && <ImportPhotoModal onClose={() => setModal(null)} color={color} />}
     </div>
   )
 }
