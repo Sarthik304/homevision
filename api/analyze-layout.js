@@ -20,8 +20,12 @@ Rules:
 - Model every distinct room as an axis-aligned rectangle: {name, x, y, width, height}, all in meters.
 - (x, y) is the room's top-left corner in one shared coordinate plane, y increasing downward — the \
 same orientation the floor plan is drawn in.
-- Rooms must not overlap. Position them so rooms that are adjacent in the photo share an edge, and \
-the overall arrangement matches the photo's real layout and topology as closely as possible.
+- Rooms must not overlap. Rooms that are adjacent in the photo must share that exact edge in your \
+output — their coordinates must line up with zero gap and zero overlap between them, not just be \
+close. The overall arrangement must match the photo's real layout and topology as closely as possible.
+- Set "hasWalls" to false for a space that is open/unenclosed in the photo — a lobby, entryway, \
+hallway, or open-plan area with no wall separating it from what's next to it. Set it to true for a \
+normal enclosed room.
 - Look carefully for any printed or handwritten dimension text on the plan (e.g. "10'-0\" x 12'-6\"", \
 "3.5m x 4m", numbers running along a wall or inside a room). Treat these as ground truth: parse them, \
 convert to meters (1 ft = 0.3048 m), and use them as that room's exact width/height.
@@ -51,8 +55,9 @@ const LAYOUT_JSON_SCHEMA = {
           y: { type: 'number' },
           width: { type: 'number' },
           height: { type: 'number' },
+          hasWalls: { type: 'boolean' },
         },
-        required: ['name', 'x', 'y', 'width', 'height'],
+        required: ['name', 'x', 'y', 'width', 'height', 'hasWalls'],
       },
     },
   },

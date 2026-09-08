@@ -68,4 +68,33 @@ describe('importedLayoutToHouseRooms', () => {
     expect(importedLayoutToHouseRooms({ rooms: 'not an array' })).toEqual([])
     expect(importedLayoutToHouseRooms(null)).toEqual([])
   })
+
+  it('closes a small gap between two nearly-adjacent rooms without creating an overlap', () => {
+    const rooms = importedLayoutToHouseRooms({
+      rooms: [
+        { name: 'A', x: 0, y: 0, width: 3, height: 3 },
+        { name: 'B', x: 3.3, y: 0, width: 3, height: 3 },
+      ],
+    })
+    const [a, b] = rooms
+    expect(a.x + a.width).toBeCloseTo(b.x, 5)
+  })
+
+  it('leaves rooms alone when the gap between them is larger than the snap tolerance', () => {
+    const rooms = importedLayoutToHouseRooms({
+      rooms: [
+        { name: 'A', x: 0, y: 0, width: 3, height: 3 },
+        { name: 'B', x: 5, y: 0, width: 3, height: 3 },
+      ],
+    })
+    expect(rooms[0].x).toBe(0)
+    expect(rooms[1].x).toBe(5)
+  })
+
+  it('marks a room with hasWalls: false as an open floor with no walls', () => {
+    const rooms = importedLayoutToHouseRooms({
+      rooms: [{ name: 'Lobby', x: 0, y: 0, width: 4, height: 3, hasWalls: false }],
+    })
+    expect(rooms[0].walls).toEqual({ top: false, bottom: false, left: false, right: false })
+  })
 })
