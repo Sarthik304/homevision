@@ -1609,11 +1609,15 @@ export default function FloorPlanEditor() {
 
             const nameFontSize = 12
             const dimFontSize = 10
-            const nameLineHeight = nameFontSize + 6
+            const singleLineHeight = nameFontSize + 6
             const dimLineHeight = dimFontSize + 4
             const labelGap = 2
-            const showDimensionLabel = pixelH >= nameLineHeight + labelGap + dimLineHeight
-            const labelBlockHeight = showDimensionLabel ? nameLineHeight + labelGap + dimLineHeight : nameLineHeight
+            // estimate 1 vs 2 lines so the dimension label doesn't collide with a wrapped name —
+            // the name text itself is never height-constrained, so it can never get clipped
+            const nameLines = room.name.length * nameFontSize * 0.55 > pixelW ? 2 : 1
+            const nameBlockHeight = singleLineHeight * nameLines
+            const showDimensionLabel = pixelH >= nameBlockHeight + labelGap + dimLineHeight
+            const labelBlockHeight = showDimensionLabel ? nameBlockHeight + labelGap + dimLineHeight : nameBlockHeight
             const labelStartY = Math.max(0, (pixelH - labelBlockHeight) / 2)
 
             return (
@@ -1713,9 +1717,7 @@ export default function FloorPlanEditor() {
                   text={room.name}
                   width={pixelW}
                   y={labelStartY}
-                  height={nameLineHeight}
                   align="center"
-                  verticalAlign="middle"
                   fontSize={nameFontSize}
                   fontStyle={isSelected ? 'bold' : 'normal'}
                   fill={isSelected ? color.brand : color.text}
@@ -1727,7 +1729,7 @@ export default function FloorPlanEditor() {
                   <Text
                     text={`${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`}
                     width={pixelW}
-                    y={labelStartY + nameLineHeight + labelGap}
+                    y={labelStartY + nameBlockHeight + labelGap}
                     align="center"
                     fontSize={dimFontSize}
                     fill={color.muted}
