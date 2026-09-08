@@ -1638,15 +1638,18 @@ export default function FloorPlanEditor() {
             const nameFontSize = 12
             const dimFontSize = 10
             const singleLineHeight = nameFontSize + 6
-            const dimLineHeight = dimFontSize + 4
+            const dimSingleLineHeight = dimFontSize + 4
             const labelGap = 2
-            // measure how many lines the name will actually wrap to, so the dimension label doesn't
-            // collide with it — the name text itself is never height-constrained, so it can never
-            // get clipped even if this estimate is off
+            const dimensionText = `${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`
+            // measure how many lines the name and dimension text will actually wrap to, so the two
+            // labels don't collide or spill past the room — neither Text node is height-constrained,
+            // so a wrong estimate here can only affect spacing, never clip or crop the text itself
             const nameLines = estimateWrappedLines(room.name, nameFontSize, pixelW)
+            const dimLines = estimateWrappedLines(dimensionText, dimFontSize, pixelW)
             const nameBlockHeight = singleLineHeight * nameLines
-            const showDimensionLabel = pixelH >= nameBlockHeight + labelGap + dimLineHeight
-            const labelBlockHeight = showDimensionLabel ? nameBlockHeight + labelGap + dimLineHeight : nameBlockHeight
+            const dimBlockHeight = dimSingleLineHeight * dimLines
+            const showDimensionLabel = pixelH >= nameBlockHeight + labelGap + dimBlockHeight
+            const labelBlockHeight = showDimensionLabel ? nameBlockHeight + labelGap + dimBlockHeight : nameBlockHeight
             const labelStartY = Math.max(0, (pixelH - labelBlockHeight) / 2)
 
             return (
@@ -1756,7 +1759,7 @@ export default function FloorPlanEditor() {
 
                 {showDimensionLabel && (
                   <Text
-                    text={`${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`}
+                    text={dimensionText}
                     width={pixelW}
                     y={labelStartY + nameBlockHeight + labelGap}
                     align="center"
