@@ -1607,6 +1607,15 @@ export default function FloorPlanEditor() {
               : null
             const hasAnyWall = Object.values(room.walls ?? DEFAULT_WALLS).some(Boolean)
 
+            const nameFontSize = 12
+            const dimFontSize = 10
+            const nameLineHeight = nameFontSize + 6
+            const dimLineHeight = dimFontSize + 4
+            const labelGap = 2
+            const showDimensionLabel = pixelH >= nameLineHeight + labelGap + dimLineHeight
+            const labelBlockHeight = showDimensionLabel ? nameLineHeight + labelGap + dimLineHeight : nameLineHeight
+            const labelStartY = Math.max(0, (pixelH - labelBlockHeight) / 2)
+
             return (
               <Group
                 key={room.id}
@@ -1703,26 +1712,29 @@ export default function FloorPlanEditor() {
                 <Text
                   text={room.name}
                   width={pixelW}
-                  height={pixelH}
+                  y={labelStartY}
+                  height={nameLineHeight}
                   align="center"
                   verticalAlign="middle"
-                  fontSize={12}
+                  fontSize={nameFontSize}
                   fontStyle={isSelected ? 'bold' : 'normal'}
                   fill={isSelected ? color.brand : color.text}
                   fontFamily={font}
                   listening={false}
                 />
 
-                <Text
-                  text={`${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`}
-                  width={pixelW}
-                  y={pixelH - 20}
-                  align="center"
-                  fontSize={10}
-                  fill={color.muted}
-                  fontFamily={font}
-                  listening={false}
-                />
+                {showDimensionLabel && (
+                  <Text
+                    text={`${formatLength(room.width, unit)} × ${formatLength(room.height, unit)}`}
+                    width={pixelW}
+                    y={labelStartY + nameLineHeight + labelGap}
+                    align="center"
+                    fontSize={dimFontSize}
+                    fill={color.muted}
+                    fontFamily={font}
+                    listening={false}
+                  />
+                )}
 
                 {isSelected && (
                   <Line
