@@ -46,6 +46,34 @@ const WALL_LENGTH_POPUP_HEIGHT = 100
 // manual double-click detection (Konva's dblclick is unreliable on draggable shapes)
 const DOUBLE_CLICK_MS = 350
 
+let measureTextCtx = null
+// how many lines Konva's word-wrap will need for `text` at this font size within `maxWidth` —
+// used only to reserve space for a room's dimension label below its name, never to size the name
+// text itself (which is never height-constrained, so a wrong guess here can't clip it)
+function estimateWrappedLines(text, fontSize, maxWidth) {
+  if (!text || maxWidth <= 0) return 1
+  if (!measureTextCtx) measureTextCtx = document.createElement('canvas').getContext('2d')
+  measureTextCtx.font = `${fontSize}px ${font}`
+
+  let lines = 1
+  let lineWidth = 0
+  for (const word of text.split(' ')) {
+    const wordWidth = measureTextCtx.measureText(word).width
+    const spaceWidth = lineWidth > 0 ? measureTextCtx.measureText(' ').width : 0
+    if (lineWidth + spaceWidth + wordWidth <= maxWidth) {
+      lineWidth += spaceWidth + wordWidth
+    } else if (wordWidth > maxWidth) {
+      // the word alone doesn't fit — Konva breaks it mid-word, costing at least one more line
+      lines += lineWidth > 0 ? 2 : 1
+      lineWidth = 0
+    } else {
+      lines += 1
+      lineWidth = wordWidth
+    }
+  }
+  return lines
+}
+
 // true if two rooms' bounding boxes are within margin meters of each other (approximate, for rotation-snap gating)
 function roomsAreNear(a, b, margin) {
   const within1D = (aMin, aMax, bMin, bMax) => aMin - margin <= bMax && bMin - margin <= aMax
@@ -1612,9 +1640,10 @@ export default function FloorPlanEditor() {
             const singleLineHeight = nameFontSize + 6
             const dimLineHeight = dimFontSize + 4
             const labelGap = 2
-            // estimate 1 vs 2 lines so the dimension label doesn't collide with a wrapped name —
-            // the name text itself is never height-constrained, so it can never get clipped
-            const nameLines = room.name.length * nameFontSize * 0.55 > pixelW ? 2 : 1
+            // measure how many lines the name will actually wrap to, so the dimension label doesn't
+            // collide with it — the name text itself is never height-constrained, so it can never
+            // get clipped even if this estimate is off
+            const nameLines = estimateWrappedLines(room.name, nameFontSize, pixelW)
             const nameBlockHeight = singleLineHeight * nameLines
             const showDimensionLabel = pixelH >= nameBlockHeight + labelGap + dimLineHeight
             const labelBlockHeight = showDimensionLabel ? nameBlockHeight + labelGap + dimLineHeight : nameBlockHeight
