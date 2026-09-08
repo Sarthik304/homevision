@@ -32,7 +32,9 @@ consistent with the photo.
 - Use short, clear room names as labeled in the photo (e.g. "Bedroom", "Kitchen", "Bathroom"); if a \
 room is unlabeled, infer a reasonable name from context.
 - Output between 1 and 12 rooms. Ignore furniture and any text or markings that aren't room \
-boundaries.`
+boundaries.
+- Respond with ONLY the JSON object described by the schema — no preamble, explanation, or markdown \
+code fences around it.`
 
 const LAYOUT_JSON_SCHEMA = {
   type: 'object',
@@ -61,6 +63,20 @@ function parseDataUrl(image) {
   const match = typeof image === 'string' && image.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/)
   if (!match) return null
   return { mimeType: match[1], base64Data: match[2] }
+}
+
+// despite response_format, Gemini sometimes wraps the JSON in prose or a code fence —
+// pull out the outermost {...} rather than assuming the whole string parses cleanly
+function extractLayoutJson(text) {
+  if (typeof text !== 'string') return null
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start === -1 || end === -1 || end < start) return null
+  try {
+    return JSON.parse(text.slice(start, end + 1))
+  } catch {
+    return null
+  }
 }
 
 export default async function handler(req, res) {
@@ -105,7 +121,7 @@ export default async function handler(req, res) {
       },
     })
 
-    const layout = JSON.parse(interaction.output_text)
+    const layout = extractLayoutJson(interaction.output_text)
     if (!Array.isArray(layout?.rooms) || layout.rooms.length === 0) {
       res.status(502).json({ error: "Couldn't read a layout from that photo. Try a clearer, simpler floor plan image." })
       return
