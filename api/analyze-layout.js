@@ -98,6 +98,11 @@ export default async function handler(req, res) {
         mime_type: 'application/json',
         schema: LAYOUT_JSON_SCHEMA,
       },
+      // this task doesn't need deep reasoning — keep it quick so we stay well under
+      // Vercel's 60s function limit instead of burning it on extended thinking
+      generation_config: {
+        thinking_level: 'low',
+      },
     })
 
     const layout = JSON.parse(interaction.output_text)
