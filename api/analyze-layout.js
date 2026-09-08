@@ -123,6 +123,7 @@ export default async function handler(req, res) {
 
     const layout = extractLayoutJson(interaction.output_text)
     if (!Array.isArray(layout?.rooms) || layout.rooms.length === 0) {
+      console.error('analyze-layout: no usable rooms', interaction.output_text?.slice(0, 2000))
       res.status(502).json({ error: "Couldn't read a layout from that photo. Try a clearer, simpler floor plan image." })
       return
     }
