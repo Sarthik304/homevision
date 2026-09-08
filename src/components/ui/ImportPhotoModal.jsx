@@ -4,7 +4,7 @@ import Modal from './Modal'
 import { radius } from '../../theme'
 import { importedLayoutToHouseRooms } from '../../utils/importLayout'
 
-const MAX_DIMENSION = 1200 // px, keeps the upload small for cost and Vercel's request-size limit
+const MAX_DIMENSION = 1800 // px — big enough to keep printed dimension labels on the plan legible
 const JPEG_QUALITY = 0.85
 
 // downsizes the photo client-side via canvas before it's sent to the API

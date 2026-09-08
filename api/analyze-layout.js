@@ -8,9 +8,10 @@ export const config = {
   maxDuration: 60,
 }
 
-// free-tier model — good enough for a best-effort layout sketch from a photo
-const MODEL = 'gemini-3.8-flash'
-const MAX_BASE64_LENGTH = 3_000_000 // ~2.2MB decoded — plenty for a resized floor-plan photo
+// established model with a more generous free-tier quota than newer flagship releases —
+// good enough for a best-effort layout sketch from a photo
+const MODEL = 'gemini-2.5-flash'
+const MAX_BASE64_LENGTH = 4_000_000 // ~3MB decoded — headroom for the larger 1800px resize
 
 const SYSTEM_PROMPT = `You are reading a photo of a home floor plan (a sketch, blueprint, or \
 photographed diagram) and converting it into a simplified 2D layout.
@@ -21,10 +22,13 @@ Rules:
 same orientation the floor plan is drawn in.
 - Rooms must not overlap. Position them so rooms that are adjacent in the photo share an edge, and \
 the overall arrangement matches the photo's real layout and topology as closely as possible.
-- Photos rarely carry reliable absolute scale. If dimensions are labeled on the plan, use them \
-(convert to meters). Otherwise estimate realistic residential room sizes (bedrooms roughly 3-4m per \
-side, bathrooms roughly 2x2m, kitchens roughly 3x3m, living rooms larger, hallways narrow) and keep \
-rooms' sizes relative to each other consistent with the photo.
+- Look carefully for any printed or handwritten dimension text on the plan (e.g. "10'-0\" x 12'-6\"", \
+"3.5m x 4m", numbers running along a wall or inside a room). Treat these as ground truth: parse them, \
+convert to meters (1 ft = 0.3048 m), and use them as that room's exact width/height.
+- Only when no dimension text is visible anywhere on the plan should you fall back to estimating \
+realistic residential room sizes (bedrooms roughly 3-4m per side, bathrooms roughly 2x2m, kitchens \
+roughly 3x3m, living rooms larger, hallways narrow), keeping rooms' sizes relative to each other \
+consistent with the photo.
 - Use short, clear room names as labeled in the photo (e.g. "Bedroom", "Kitchen", "Bathroom"); if a \
 room is unlabeled, infer a reasonable name from context.
 - Output between 1 and 12 rooms. Ignore furniture and any text or markings that aren't room \
