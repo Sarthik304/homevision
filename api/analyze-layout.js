@@ -33,8 +33,8 @@ consistent with the photo.
 room is unlabeled, infer a reasonable name from context.
 - Output between 1 and 12 rooms. Ignore furniture and any text or markings that aren't room \
 boundaries.
-- Respond with ONLY the JSON object described by the schema — no preamble, explanation, or markdown \
-code fences around it.`
+- Respond with ONLY the JSON object described by the schema — a top-level object with a "rooms" key \
+holding the array, not a bare array — and no preamble, explanation, or markdown code fences around it.`
 
 const LAYOUT_JSON_SCHEMA = {
   type: 'object',
@@ -65,18 +65,24 @@ function parseDataUrl(image) {
   return { mimeType: match[1], base64Data: match[2] }
 }
 
-// despite response_format, Gemini sometimes wraps the JSON in prose or a code fence —
-// pull out the outermost {...} rather than assuming the whole string parses cleanly
+// despite response_format, Gemini sometimes wraps the JSON in prose or a code fence, and
+// sometimes returns a bare [...] array of rooms instead of the requested {rooms: [...]} object —
+// find the outermost JSON value of either shape rather than assuming a strict {...} object
 function extractLayoutJson(text) {
   if (typeof text !== 'string') return null
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start === -1 || end === -1 || end < start) return null
+  const starts = [text.indexOf('{'), text.indexOf('[')].filter((i) => i !== -1)
+  if (starts.length === 0) return null
+  const start = Math.min(...starts)
+  const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'))
+  if (end < start) return null
+
+  let parsed
   try {
-    return JSON.parse(text.slice(start, end + 1))
+    parsed = JSON.parse(text.slice(start, end + 1))
   } catch {
     return null
   }
+  return Array.isArray(parsed) ? { rooms: parsed } : parsed
 }
 
 export default async function handler(req, res) {
