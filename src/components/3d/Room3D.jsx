@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plane, Quaternion, SRGBColorSpace, Shape, TextureLoader, Vector3 } from 'three'
-import { Edges } from '@react-three/drei'
+import { Edges, Html } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
-import { getColors } from '../../theme'
+import { getColors, radius } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../../constants/quad'
 import { getLWallDefs, getQuadWallDefs, getRectWallDefs, wallInwardSign, WALL_THICKNESS } from '../../utils/wallGeometry'
+import { MIN_FURNITURE_SIZE } from '../../utils/furnitureGeometry'
+import DimensionInput from '../ui/DimensionInput'
 import {
   movePictureToPoint,
   pictureCenterX,
@@ -182,8 +184,18 @@ const FLOOR_PLANE = new Plane(new Vector3(0, 1, 0), 0)
 function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, onDragChange }) {
   const selectFurniture = useHouseStore((s) => s.selectFurniture)
   const updateFurniture = useHouseStore((s) => s.updateFurniture)
+  const unit = useHouseStore((s) => s.unit)
+  const darkMode = useHouseStore((s) => s.darkMode)
+  const color = getColors(darkMode)
   const groupRef = useRef(null)
   const dragRef = useRef(null)
+  const lastPointerDownRef = useRef(0)
+  const [showDimensionPopup, setShowDimensionPopup] = useState(false)
+
+  // deselecting the item (e.g. clicking elsewhere) closes the popup along with it
+  useEffect(() => {
+    if (!isSelected) setShowDimensionPopup(false)
+  }, [isSelected])
 
   const isSofa = item.type === 'sofa' || item.type === 'lego-sofa'
   const isLegoBed = item.type === 'lego-bed'
@@ -210,6 +222,15 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
     e.stopPropagation()
     onRoomSelect(room.id)
     selectFurniture(item.id)
+
+    const now = performance.now()
+    const isDoubleClick = now - lastPointerDownRef.current < DOUBLE_CLICK_MS
+    lastPointerDownRef.current = now
+    if (isDoubleClick) {
+      setShowDimensionPopup(true)
+      return
+    }
+
     e.target.setPointerCapture(e.pointerId)
     const local = pointerToRoomLocal(e)
     dragRef.current = { grabX: local.x, grabZ: local.z, startX: item.x, startY: item.y, currentX: item.x, currentY: item.y }
@@ -270,6 +291,80 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           <Edges color={highlightColor} lineWidth={2} />
         </mesh>
+      )}
+      {showDimensionPopup && (
+        <Html position={[0, item.height + 0.3, 0]} center>
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="pixel-shadow"
+            style={{
+              width: 180,
+              background: color.bg,
+              border: `1.5px solid ${color.text}`,
+              borderRadius: radius.md,
+              '--pixel-shadow-color': color.text,
+              padding: 10,
+              cursor: 'default',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+                gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>{item.label} size</span>
+              <button
+                onClick={() => setShowDimensionPopup(false)}
+                aria-label="Close"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: color.muted,
+                  cursor: 'pointer',
+                  fontSize: 15,
+                  lineHeight: 1,
+                  padding: '2px 4px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                ['width', 'Width'],
+                ['depth', 'Depth'],
+                ['height', 'Height'],
+              ].map(([key, label]) => (
+                <div key={key}>
+                  <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>
+                    {label} ({unit})
+                  </label>
+                  <DimensionInput
+                    valueMeters={item[key]}
+                    unit={unit}
+                    min={MIN_FURNITURE_SIZE}
+                    onCommit={(meters) => updateFurniture(room.id, item.id, { [key]: meters })}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      fontSize: 12,
+                      border: `1px solid ${color.borderInput}`,
+                      borderRadius: radius.sm,
+                      background: color.surface,
+                      color: color.text,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </Html>
       )}
     </group>
   )
