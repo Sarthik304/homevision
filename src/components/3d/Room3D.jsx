@@ -59,6 +59,119 @@ function SofaMesh({ width, height, depth, color }) {
   )
 }
 
+// proportions for a LEGO-brick bed: a footboard and headboard strip flank a mattress zone, three
+// courses stacked in height (base, mattress-level, and a headboard-only top course), each studded
+// course topped with a grid of cylinders — the same layered brick+stud structure as a real LEGO
+// build, adapted from a square toy footprint to a real rectangular bed size
+const LEGO_BED_END_DEPTH_RATIO = 0.12 // fraction of depth each headboard/footboard strip occupies
+const LEGO_BED_STUD_COLS = 8
+const LEGO_BED_STUD_MATTRESS_ROWS = 6
+const LEGO_BED_STUD_HEIGHT_RATIO = 1.8 / 9.5 // real brick's stud-height : course-height ratio
+const LEGO_BED_WHITE = '#F2F3F2'
+
+// a grid of cylindrical studs over one rectangular course, sitting at height `y`
+function StudGrid({ cols, rows, xStart, xEnd, zStart, zEnd, y, radius, height, color }) {
+  const colSpacing = (xEnd - xStart) / cols
+  const rowSpacing = (zEnd - zStart) / rows
+  const studs = []
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      studs.push(
+        <mesh key={`${c}-${r}`} position={[xStart + colSpacing * (c + 0.5), y + height / 2, zStart + rowSpacing * (r + 0.5)]}>
+          <cylinderGeometry args={[radius, radius, height, 16]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      )
+    }
+  }
+  return <>{studs}</>
+}
+
+function LegoBedMesh({ width, height, depth, color }) {
+  const courseH = height / 3
+  const endDepth = depth * LEGO_BED_END_DEPTH_RATIO
+  const mattressDepth = depth - endDepth * 2
+  const headZStart = -depth / 2
+  const headZEnd = headZStart + endDepth
+  const footZEnd = depth / 2
+  const footZStart = footZEnd - endDepth
+  const mattressZStart = headZEnd
+  const mattressZEnd = footZStart
+
+  const studHeight = courseH * LEGO_BED_STUD_HEIGHT_RATIO
+  const studRadius = Math.min(width / LEGO_BED_STUD_COLS, mattressDepth / LEGO_BED_STUD_MATTRESS_ROWS, endDepth) * 0.3
+
+  return (
+    <group>
+      {/* base frame — full footprint, no studs (the course above just rests on it) */}
+      <mesh position={[0, courseH / 2, 0]}>
+        <boxGeometry args={[width, courseH, depth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+
+      {/* headboard's lower course — no studs, the upper headboard course sits directly on it */}
+      <mesh position={[0, courseH * 1.5, (headZStart + headZEnd) / 2]}>
+        <boxGeometry args={[width, courseH, endDepth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+
+      {/* footboard — studded */}
+      <mesh position={[0, courseH * 1.5, (footZStart + footZEnd) / 2]}>
+        <boxGeometry args={[width, courseH, endDepth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <StudGrid
+        cols={LEGO_BED_STUD_COLS}
+        rows={1}
+        xStart={-width / 2}
+        xEnd={width / 2}
+        zStart={footZStart}
+        zEnd={footZEnd}
+        y={courseH * 2}
+        radius={studRadius}
+        height={studHeight}
+        color={color}
+      />
+
+      {/* mattress plate — studded, always white regardless of the bed's chosen color */}
+      <mesh position={[0, courseH * 1.5, (mattressZStart + mattressZEnd) / 2]}>
+        <boxGeometry args={[width, courseH, mattressDepth]} />
+        <meshStandardMaterial color={LEGO_BED_WHITE} />
+      </mesh>
+      <StudGrid
+        cols={LEGO_BED_STUD_COLS}
+        rows={LEGO_BED_STUD_MATTRESS_ROWS}
+        xStart={-width / 2}
+        xEnd={width / 2}
+        zStart={mattressZStart}
+        zEnd={mattressZEnd}
+        y={courseH * 2}
+        radius={studRadius}
+        height={studHeight}
+        color={LEGO_BED_WHITE}
+      />
+
+      {/* headboard's upper course — only over the head end, what makes it taller than the footboard */}
+      <mesh position={[0, courseH * 2.5, (headZStart + headZEnd) / 2]}>
+        <boxGeometry args={[width, courseH, endDepth]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <StudGrid
+        cols={LEGO_BED_STUD_COLS}
+        rows={1}
+        xStart={-width / 2}
+        xEnd={width / 2}
+        zStart={headZStart}
+        zEnd={headZEnd}
+        y={courseH * 3}
+        radius={studRadius}
+        height={studHeight}
+        color={color}
+      />
+    </group>
+  )
+}
+
 // shared, stateless horizontal plane at y=0 — every room's floor sits here, used to turn a
 // pointer ray into a world-space point while dragging furniture
 const FLOOR_PLANE = new Plane(new Vector3(0, 1, 0), 0)
@@ -73,6 +186,7 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
   const dragRef = useRef(null)
 
   const isSofa = item.type === 'sofa' || item.type === 'lego-sofa'
+  const isLegoBed = item.type === 'lego-bed'
   const baseX = item.x + item.width / 2 - room.width / 2
   const baseZ = item.y + item.depth / 2 - room.height / 2
 
@@ -142,6 +256,8 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
     >
       {isSofa ? (
         <SofaMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
+      ) : isLegoBed ? (
+        <LegoBedMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
       ) : (
         <mesh position={[0, item.height / 2, 0]}>
           <boxGeometry args={[item.width, item.height, item.depth]} />
