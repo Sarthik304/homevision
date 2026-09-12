@@ -521,7 +521,17 @@ function InteriorWalls({ room, selectedWallId, color, onSelectWall, onBodyStart,
 }
 
 // dummy furniture: a draggable + corner-resizable box per item, clamped to the room's own footprint
-function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurniture, onResizeMove, onResizeEnd }) {
+function RoomFurniture({
+  room,
+  color,
+  selectedFurnitureId,
+  onSelect,
+  updateFurniture,
+  onResizeMove,
+  onResizeEnd,
+  onRotateMove,
+  onRotateEnd,
+}) {
   const items = room.furniture ?? []
 
   return items.map((item) => {
@@ -530,7 +540,12 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
     const pixelY = item.y * SCALE
     const pixelW = item.width * SCALE
     const pixelD = item.depth * SCALE
-    const corners = {
+    const centerX = pixelX + pixelW / 2
+    const centerY = pixelY + pixelD / 2
+    const rotationDeg = item.rotation ?? 0
+    // corner handles sit outside the furniture's own rotation, so their rest positions are
+    // computed by hand — dragging them is un-rotated the same way in resizeFurnitureForCorner
+    const rawCorners = {
       tl: [pixelX, pixelY],
       tr: [pixelX + pixelW, pixelY],
       bl: [pixelX, pixelY + pixelD],
@@ -538,20 +553,27 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
     }
 
     const clampToRoom = (e) => {
-      const rawX = e.target.x() / SCALE
-      const rawY = e.target.y() / SCALE
+      // the Rect's own x/y is now its center (see the offsetX/offsetY below), so convert to/from
+      // the top-left item.x/y this store field and every other consumer expects
+      const rawX = e.target.x() / SCALE - item.width / 2
+      const rawY = e.target.y() / SCALE - item.depth / 2
       const x = Math.min(Math.max(0, rawX), Math.max(0, room.width - item.width))
       const y = Math.min(Math.max(0, rawY), Math.max(0, room.height - item.depth))
-      e.target.x(x * SCALE)
-      e.target.y(y * SCALE)
+      e.target.x(x * SCALE + pixelW / 2)
+      e.target.y(y * SCALE + pixelD / 2)
       return { x, y }
     }
+
+    const rotateHandleRest = rotateAround(centerX, pixelY - ROTATE_HANDLE_DIST, centerX, centerY, rotationDeg)
 
     return (
       <Group key={item.id}>
         <Rect
-          x={pixelX}
-          y={pixelY}
+          x={centerX}
+          y={centerY}
+          offsetX={pixelW / 2}
+          offsetY={pixelD / 2}
+          rotation={rotationDeg}
           width={pixelW}
           height={pixelD}
           fill={item.color}
@@ -582,8 +604,11 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
         />
         <Text
           text={item.label}
-          x={pixelX}
-          y={pixelY + pixelD / 2 - 6}
+          x={centerX}
+          y={centerY}
+          offsetX={pixelW / 2}
+          offsetY={6}
+          rotation={rotationDeg}
           width={pixelW}
           align="center"
           fontSize={10}
@@ -594,7 +619,8 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
 
         {isSelected &&
           FURNITURE_CORNERS.map((corner) => {
-            const [hx, hy] = corners[corner]
+            const [rawX, rawY] = rawCorners[corner]
+            const { x: hx, y: hy } = rotateAround(rawX, rawY, centerX, centerY, rotationDeg)
             return (
               <Rect
                 key={corner}
@@ -619,6 +645,38 @@ function RoomFurniture({ room, color, selectedFurnitureId, onSelect, updateFurni
               />
             )
           })}
+
+        {isSelected && (
+          <>
+            <Line
+              points={[0, -pixelD / 2, 0, -pixelD / 2 - ROTATE_HANDLE_DIST]}
+              x={centerX}
+              y={centerY}
+              rotation={rotationDeg}
+              stroke={color.brand}
+              strokeWidth={1}
+              listening={false}
+            />
+            <Circle
+              x={rotateHandleRest.x}
+              y={rotateHandleRest.y}
+              radius={ROTATE_HANDLE_RADIUS}
+              fill={color.bg}
+              stroke={color.brand}
+              strokeWidth={1.5}
+              draggable
+              hitStrokeWidth={16}
+              onDragMove={(e) => onRotateMove(e, room.id, item.id)}
+              onDragEnd={(e) => onRotateEnd(e, room.id, item.id)}
+              onMouseEnter={(e) => {
+                e.target.getStage().container().style.cursor = 'grab'
+              }}
+              onMouseLeave={(e) => {
+                e.target.getStage().container().style.cursor = 'default'
+              }}
+            />
+          </>
+        )}
       </Group>
     )
   })
@@ -1206,24 +1264,35 @@ export default function FloorPlanEditor() {
     })
   }
 
-  // resizes a furniture item by dragging one of its corners, keeping the opposite corner fixed
+  // resizes a furniture item by dragging one of its corners, keeping the opposite corner fixed.
+  // Corner handles sit outside the furniture's own rotation (unlike the room pattern, where
+  // resize handles are children of the rotated room Group and get this for free), so the drag
+  // point is un-rotated by hand here before it reaches resizeFurnitureCorner's plain axis-aligned
+  // math, and the result is re-rotated when snapping the handle back to its corner.
   function resizeFurnitureForCorner(e, roomId, furnitureId, corner) {
     const room = rooms.find((r) => r.id === roomId)
     const item = room?.furniture?.find((f) => f.id === furnitureId)
     if (!room || !item) return null
 
-    const pointerX = (e.target.x() + HANDLE_SIZE / 2) / SCALE
-    const pointerY = (e.target.y() + HANDLE_SIZE / 2) / SCALE
+    const rotationDeg = item.rotation ?? 0
+    const centerX = (item.x + item.width / 2) * SCALE
+    const centerY = (item.y + item.depth / 2) * SCALE
+    const raw = rotateAround(e.target.x() + HANDLE_SIZE / 2, e.target.y() + HANDLE_SIZE / 2, centerX, centerY, -rotationDeg)
+    const pointerX = raw.x / SCALE
+    const pointerY = raw.y / SCALE
     const rect = resizeFurnitureCorner(item, corner, pointerX, pointerY, room.width, room.height)
 
+    const newCenterX = (rect.x + rect.width / 2) * SCALE
+    const newCenterY = (rect.y + rect.depth / 2) * SCALE
     const cornerPixel = {
-      tl: [rect.x, rect.y],
-      tr: [rect.x + rect.width, rect.y],
-      bl: [rect.x, rect.y + rect.depth],
-      br: [rect.x + rect.width, rect.y + rect.depth],
+      tl: [rect.x * SCALE, rect.y * SCALE],
+      tr: [(rect.x + rect.width) * SCALE, rect.y * SCALE],
+      bl: [rect.x * SCALE, (rect.y + rect.depth) * SCALE],
+      br: [(rect.x + rect.width) * SCALE, (rect.y + rect.depth) * SCALE],
     }[corner]
-    e.target.x(cornerPixel[0] * SCALE - HANDLE_SIZE / 2)
-    e.target.y(cornerPixel[1] * SCALE - HANDLE_SIZE / 2)
+    const snapped = rotateAround(cornerPixel[0], cornerPixel[1], newCenterX, newCenterY, rotationDeg)
+    e.target.x(snapped.x - HANDLE_SIZE / 2)
+    e.target.y(snapped.y - HANDLE_SIZE / 2)
 
     return rect
   }
@@ -1242,6 +1311,46 @@ export default function FloorPlanEditor() {
       width: Math.round(rect.width * 10) / 10,
       depth: Math.round(rect.depth * 10) / 10,
     })
+  }
+
+  // angle of the furniture's rotate handle around its own center, snapped to the nearest 45° —
+  // unlike room rotation, furniture has no neighbor-wall alignment (it lives inside one room)
+  function computeFurnitureRotation(e, roomId, furnitureId) {
+    const room = rooms.find((r) => r.id === roomId)
+    const item = room?.furniture?.find((f) => f.id === furnitureId)
+    if (!room || !item) return null
+
+    const centerX = (item.x + item.width / 2) * SCALE
+    const centerY = (item.y + item.depth / 2) * SCALE
+    const angleRad = Math.atan2(e.target.x() - centerX, -(e.target.y() - centerY))
+    let deg = (angleRad * 180) / Math.PI
+    if (deg < 0) deg += 360
+
+    let finalDeg = deg
+    let bestDiff = SNAP_ANGLE_THRESHOLD_DEG
+    for (let a = 0; a < 360; a += ROTATE_SNAP_DEG) {
+      const diff = Math.min(Math.abs(deg - a), 360 - Math.abs(deg - a))
+      if (diff < bestDiff) {
+        bestDiff = diff
+        finalDeg = a
+      }
+    }
+
+    const restY = centerY - (item.depth * SCALE) / 2 - ROTATE_HANDLE_DIST
+    const { x: hx, y: hy } = rotateAround(centerX, restY, centerX, centerY, finalDeg)
+    e.target.x(hx)
+    e.target.y(hy)
+    return finalDeg
+  }
+
+  function handleFurnitureRotateMove(e, roomId, furnitureId) {
+    const deg = computeFurnitureRotation(e, roomId, furnitureId)
+    if (deg != null) updateFurniture(roomId, furnitureId, { rotation: deg })
+  }
+
+  function handleFurnitureRotateEnd(e, roomId, furnitureId) {
+    const deg = computeFurnitureRotation(e, roomId, furnitureId)
+    if (deg != null) updateFurniture(roomId, furnitureId, { rotation: Math.round(deg * 10) / 10 })
   }
 
   // angle of the drag handle around the room's center, snapped to the nearest 45° or to whatever rotation aligns one of this room's walls with a nearby room's wall, any shape combination
@@ -1743,6 +1852,8 @@ export default function FloorPlanEditor() {
                   updateFurniture={updateFurniture}
                   onResizeMove={handleFurnitureResizeMove}
                   onResizeEnd={handleFurnitureResizeEnd}
+                  onRotateMove={handleFurnitureRotateMove}
+                  onRotateEnd={handleFurnitureRotateEnd}
                 />
 
                 <Text
@@ -1985,6 +2096,31 @@ export default function FloorPlanEditor() {
                 />
               </div>
             ))}
+
+            <div>
+              <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>Rotation (°)</label>
+              <input
+                type="number"
+                step={1}
+                value={Math.round(dimensionPopupItem.rotation ?? 0)}
+                onChange={(e) => {
+                  const deg = Number(e.target.value)
+                  if (Number.isFinite(deg)) {
+                    updateFurniture(dimensionPopup.roomId, dimensionPopup.furnitureId, { rotation: ((deg % 360) + 360) % 360 })
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  fontSize: 12,
+                  border: `1px solid ${color.borderInput}`,
+                  borderRadius: radius.sm,
+                  background: color.surface,
+                  color: color.text,
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
           </div>
         </div>
       )}

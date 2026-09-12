@@ -680,6 +680,7 @@ const useHouseStore = create((set) => ({
               depth,
               height,
               color,
+              rotation: 0,
             },
           ],
         }

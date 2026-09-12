@@ -269,6 +269,7 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
     <group
       ref={groupRef}
       position={[baseX, 0, baseZ]}
+      rotation={[0, -((item.rotation ?? 0) * Math.PI) / 180, 0]}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -362,6 +363,29 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
                   />
                 </div>
               ))}
+
+              <div>
+                <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>Rotation (°)</label>
+                <input
+                  type="number"
+                  step={1}
+                  value={Math.round(item.rotation ?? 0)}
+                  onChange={(e) => {
+                    const deg = Number(e.target.value)
+                    if (Number.isFinite(deg)) updateFurniture(room.id, item.id, { rotation: ((deg % 360) + 360) % 360 })
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontSize: 12,
+                    border: `1px solid ${color.borderInput}`,
+                    borderRadius: radius.sm,
+                    background: color.surface,
+                    color: color.text,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
             </div>
           </div>
         </Html>
