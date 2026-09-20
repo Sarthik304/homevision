@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { DEFAULT_L_WALLS } from '../constants/lshape'
 import { defaultQuadCorners, quadCornersOf, rescaleQuadCorners } from '../constants/quad'
 import { nextId } from '../utils/id'
+import { INTERIOR_WALL_THICKNESS } from '../utils/wallGeometry'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
@@ -554,7 +555,7 @@ const useHouseStore = create((set) => ({
               y1: room.height / 2,
               x2: room.width * 0.75,
               y2: room.height / 2,
-              thickness: 0.1,
+              thickness: INTERIOR_WALL_THICKNESS,
               doors: [],
               windows: [],
               pictures: [],

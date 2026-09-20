@@ -763,11 +763,15 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
     [polygonPoints, width, height]
   )
 
+  // every boundary wall on a room shares one thickness so their corners miter without a gap —
+  // real houses build their exterior walls uniformly too, unlike interior partition walls, which
+  // do carry their own individual thickness (see room.interiorWalls[].thickness below)
+  const boundaryThickness = room.wallThickness ?? WALL_THICKNESS
   const wallDefs = isL
-    ? getLWallDefs(width, height, notchWidth, notchHeight)
+    ? getLWallDefs(width, height, notchWidth, notchHeight, boundaryThickness)
     : isQuad
-      ? getQuadWallDefs(corners, width, height)
-      : getRectWallDefs(width, height)
+      ? getQuadWallDefs(corners, width, height, boundaryThickness)
+      : getRectWallDefs(width, height, boundaryThickness)
 
   return (
     <group position={[posX, 0, posZ]} rotation={[0, -((room.rotation ?? 0) * Math.PI) / 180, 0]}>
@@ -799,6 +803,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             length={w.length}
             position={w.position}
             rotation={w.rotation}
+            thickness={boundaryThickness}
             trimStart={w.trimStart}
             trimEnd={w.trimEnd}
             color={(room.wallColors ?? {})[w.key] ?? wallColor}

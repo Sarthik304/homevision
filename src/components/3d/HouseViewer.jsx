@@ -8,6 +8,7 @@ import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { eventClientXY } from '../../utils/pointerPosition'
 import DimensionInput from '../ui/DimensionInput'
+import { INTERIOR_WALL_THICKNESS, MAX_WALL_THICKNESS, MIN_WALL_THICKNESS, WALL_THICKNESS } from '../../utils/wallGeometry'
 
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
@@ -140,6 +141,7 @@ const selectHouseViewerState = (s) => ({
   selectInteriorWall: s.selectInteriorWall,
   updateWallColor: s.updateWallColor,
   updateInteriorWall: s.updateInteriorWall,
+  updateRoom: s.updateRoom,
   addPicture: s.addPicture,
   updatePicture: s.updatePicture,
   removePicture: s.removePicture,
@@ -159,6 +161,7 @@ export default function HouseViewer() {
     selectInteriorWall,
     updateWallColor,
     updateInteriorWall,
+    updateRoom,
     addPicture,
     updatePicture,
     removePicture,
@@ -244,6 +247,13 @@ export default function HouseViewer() {
     : colorPicker.kind === 'boundary'
       ? (activeRoom.pictures ?? []).filter((p) => p.wall === colorPicker.key)
       : (activeInteriorWall?.pictures ?? [])
+  // boundary walls share one thickness per room (its corners miter to a single value); interior
+  // walls each carry their own — see wallThickness/thickness comments in useHouseStore.js
+  const activeThickness = !activeRoom
+    ? WALL_THICKNESS
+    : colorPicker.kind === 'boundary'
+      ? (activeRoom.wallThickness ?? WALL_THICKNESS)
+      : (activeInteriorWall?.thickness ?? INTERIOR_WALL_THICKNESS)
 
   const handleColorChange = (c) => {
     if (!colorPicker) return
@@ -251,6 +261,15 @@ export default function HouseViewer() {
       updateWallColor(colorPicker.roomId, colorPicker.key, c)
     } else {
       updateInteriorWall(colorPicker.roomId, colorPicker.key, { color: c })
+    }
+  }
+
+  const handleThicknessChange = (meters) => {
+    if (!colorPicker) return
+    if (colorPicker.kind === 'boundary') {
+      updateRoom(colorPicker.roomId, { wallThickness: meters })
+    } else {
+      updateInteriorWall(colorPicker.roomId, colorPicker.key, { thickness: meters })
     }
   }
 
@@ -446,6 +465,31 @@ export default function HouseViewer() {
             </div>
           </div>
           <HexColorPicker color={activeColor} onChange={handleColorChange} style={{ width: '100%' }} />
+
+          <div style={{ marginTop: 10 }}>
+            <label style={{ fontSize: 11, color: color.muted, display: 'block', marginBottom: 4 }}>
+              Thickness ({unit})
+            </label>
+            <DimensionInput
+              valueMeters={activeThickness}
+              unit={unit}
+              min={MIN_WALL_THICKNESS}
+              max={MAX_WALL_THICKNESS}
+              step={0.005}
+              decimals={3}
+              onCommit={handleThicknessChange}
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                fontSize: 12,
+                border: `1px solid ${color.borderInput}`,
+                borderRadius: radius.sm,
+                background: color.surface,
+                color: color.text,
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
 
           <div style={{ height: 1, background: color.border, margin: '10px 0' }} />
 

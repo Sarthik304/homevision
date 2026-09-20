@@ -29,9 +29,10 @@ export function fromDisplayLength(value, unit) {
   return value * UNIT_BY_KEY[unit].metersPerUnit
 }
 
-// rounds a display-unit number for showing in a controlled input
-export function roundDisplayLength(meters, unit) {
-  const factor = 10 ** UNIT_BY_KEY[unit].decimals
+// rounds a display-unit number for showing in a controlled input. `decimals` overrides the
+// unit's usual precision (see UNIT_OPTIONS) for fields — like wall thickness — too small for it
+export function roundDisplayLength(meters, unit, decimals = UNIT_BY_KEY[unit].decimals) {
+  const factor = 10 ** decimals
   return Math.round(toDisplayLength(meters, unit) * factor) / factor
 }
 

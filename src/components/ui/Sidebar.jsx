@@ -9,6 +9,7 @@ import { FURNITURE_PRESETS } from '../../constants/furniture'
 import { formatLength } from '../../utils/units'
 import DimensionInput from './DimensionInput'
 import useIsMobile from '../../hooks/useIsMobile'
+import { MAX_WALL_THICKNESS, MIN_WALL_THICKNESS } from '../../utils/wallGeometry'
 
 const getSectionHeader = (color) => ({
   fontSize: 11,
@@ -344,9 +345,10 @@ function InteriorWallCard({ room, wall, actions, colorTarget, setColorTarget, co
         <DimensionInput
           valueMeters={wall.thickness}
           unit={unit}
-          min={0.05}
-          max={0.5}
-          step={0.01}
+          min={MIN_WALL_THICKNESS}
+          max={MAX_WALL_THICKNESS}
+          step={0.005}
+          decimals={3}
           onCommit={(meters) => actions.updateInteriorWall(room.id, wall.id, { thickness: meters })}
           style={{ width: 52, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.surface, color: color.text }}
         />
