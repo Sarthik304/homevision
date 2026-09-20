@@ -347,6 +347,7 @@ export default function HouseViewer() {
             <Room3D
               key={room.id}
               room={room}
+              rooms={rooms}
               isSelected={room.id === selectedRoomId}
               onClick={selectRoom}
               onSelectWall={handleSelectWall}

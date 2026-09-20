@@ -12,14 +12,19 @@ export const MIN_WALL_THICKNESS = 0.05
 export const MAX_WALL_THICKNESS = 0.6
 const EPS = 0.001
 
-// {length, position, rotation, trimStart, trimEnd} for a rectangular room's 4 boundary walls
+// {length, position, rotation, trimStart, trimEnd} for a rectangular room's 4 boundary walls.
+// `thickness` is either one number shared by all 4 walls, or a {top,bottom,left,right} map — the
+// latter is how Room3D halves a wall's thickness on just the side(s) it shares flush with a
+// neighboring room, so the pair reads as one shared wall instead of two full walls stacked
+// back to back. Each wall's own thickness only sets its own inset; left/right are trimmed by
+// top/bottom's thickness (whichever they actually abut), not their own.
 export function getRectWallDefs(width, height, thickness = WALL_THICKNESS) {
-  const inset = thickness / 2
+  const t = typeof thickness === 'number' ? { top: thickness, bottom: thickness, left: thickness, right: thickness } : thickness
   return [
-    { key: 'bottom', length: width, position: [0, 0, height / 2 - inset], rotation: [0, 0, 0], trimStart: 0, trimEnd: 0 },
-    { key: 'top', length: width, position: [0, 0, -height / 2 + inset], rotation: [0, 0, 0], trimStart: 0, trimEnd: 0 },
-    { key: 'left', length: height, position: [-width / 2 + inset, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: thickness, trimEnd: thickness },
-    { key: 'right', length: height, position: [width / 2 - inset, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: thickness, trimEnd: thickness },
+    { key: 'bottom', length: width, position: [0, 0, height / 2 - t.bottom / 2], rotation: [0, 0, 0], trimStart: 0, trimEnd: 0 },
+    { key: 'top', length: width, position: [0, 0, -height / 2 + t.top / 2], rotation: [0, 0, 0], trimStart: 0, trimEnd: 0 },
+    { key: 'left', length: height, position: [-width / 2 + t.left / 2, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: t.top, trimEnd: t.bottom },
+    { key: 'right', length: height, position: [width / 2 - t.right / 2, 0, 0], rotation: [0, -Math.PI / 2, 0], trimStart: t.top, trimEnd: t.bottom },
   ]
 }
 

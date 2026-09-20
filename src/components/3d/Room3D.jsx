@@ -6,6 +6,7 @@ import { getColors, radius } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
 import { getQuadPolygon, quadCornersOf } from '../../constants/quad'
 import { getLWallDefs, getQuadWallDefs, getRectWallDefs, wallInwardSign, WALL_THICKNESS } from '../../utils/wallGeometry'
+import { findAdjacentWall } from '../../utils/roomAdjacency'
 import { MIN_FURNITURE_SIZE } from '../../utils/furnitureGeometry'
 import DimensionInput from '../ui/DimensionInput'
 import {
@@ -729,7 +730,7 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange, onPictureDragChange }) {
+export default function Room3D({ room, rooms = [], isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange, onPictureDragChange }) {
   const darkMode = useHouseStore((s) => s.darkMode)
   const selectedFurnitureId = useHouseStore((s) => s.selectedFurnitureId)
   const palette = getColors(darkMode)
@@ -767,11 +768,21 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
   // real houses build their exterior walls uniformly too, unlike interior partition walls, which
   // do carry their own individual thickness (see room.interiorWalls[].thickness below)
   const boundaryThickness = room.wallThickness ?? WALL_THICKNESS
+  // halve a side's thickness where it sits flush against another room, so the two rooms' own
+  // halves — each still independently colored/decorated — read as one shared wall instead of two
+  // full-thickness walls stacked back to back. findAdjacentWall only matches plain, unrotated
+  // rects, so L-shape/quad/rotated rooms fall through to their unchanged, uniform thickness.
+  const wallThicknessByKey = {
+    top: findAdjacentWall(rooms, room, 'top') ? boundaryThickness / 2 : boundaryThickness,
+    bottom: findAdjacentWall(rooms, room, 'bottom') ? boundaryThickness / 2 : boundaryThickness,
+    left: findAdjacentWall(rooms, room, 'left') ? boundaryThickness / 2 : boundaryThickness,
+    right: findAdjacentWall(rooms, room, 'right') ? boundaryThickness / 2 : boundaryThickness,
+  }
   const wallDefs = isL
     ? getLWallDefs(width, height, notchWidth, notchHeight, boundaryThickness)
     : isQuad
       ? getQuadWallDefs(corners, width, height, boundaryThickness)
-      : getRectWallDefs(width, height, boundaryThickness)
+      : getRectWallDefs(width, height, wallThicknessByKey)
 
   return (
     <group position={[posX, 0, posZ]} rotation={[0, -((room.rotation ?? 0) * Math.PI) / 180, 0]}>
@@ -803,7 +814,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
             length={w.length}
             position={w.position}
             rotation={w.rotation}
-            thickness={boundaryThickness}
+            thickness={wallThicknessByKey[w.key] ?? boundaryThickness}
             trimStart={w.trimStart}
             trimEnd={w.trimEnd}
             color={(room.wallColors ?? {})[w.key] ?? wallColor}

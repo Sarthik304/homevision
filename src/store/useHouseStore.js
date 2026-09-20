@@ -3,6 +3,7 @@ import { DEFAULT_L_WALLS } from '../constants/lshape'
 import { defaultQuadCorners, quadCornersOf, rescaleQuadCorners } from '../constants/quad'
 import { nextId } from '../utils/id'
 import { INTERIOR_WALL_THICKNESS } from '../utils/wallGeometry'
+import { findAdjacentWall, isPlainRect } from '../utils/roomAdjacency'
 
 const DEFAULT_WALLS = { top: true, bottom: true, left: true, right: true }
 
@@ -31,37 +32,6 @@ function createPicture(wall, src) {
     bottom: DEFAULT_PICTURE_BOTTOM,
     src,
   }
-}
-
-const WALL_ADJACENCY = { right: 'left', left: 'right', top: 'bottom', bottom: 'top' }
-const ADJACENCY_TOLERANCE = 0.05 // meters, max gap to count two boundary walls as flush/shared
-
-// a room with no `shape` at all is a plain rect (the two seed rooms predate the `shape` field)
-function isPlainRect(room) {
-  return (room.shape ?? 'rect') === 'rect'
-}
-
-// finds the neighboring room whose wall sits flush against room's wallKey edge (rect rooms only)
-function findAdjacentWall(rooms, room, wallKey) {
-  if (!isPlainRect(room) || room.rotation) return null
-  const otherWallKey = WALL_ADJACENCY[wallKey]
-  if (!otherWallKey) return null
-  const other = rooms.find((r) => {
-    if (r.id === room.id) return false
-    if (!isPlainRect(r) || r.rotation) return false
-    if (!(r.walls ?? DEFAULT_WALLS)[otherWallKey]) return false
-    if (wallKey === 'right' || wallKey === 'left') {
-      const near = wallKey === 'right' ? room.x + room.width : room.x
-      const far = wallKey === 'right' ? r.x : r.x + r.width
-      if (Math.abs(near - far) > ADJACENCY_TOLERANCE) return false
-      return Math.min(room.y + room.height, r.y + r.height) - Math.max(room.y, r.y) > 0
-    }
-    const near = wallKey === 'bottom' ? room.y + room.height : room.y
-    const far = wallKey === 'bottom' ? r.y : r.y + r.height
-    if (Math.abs(near - far) > ADJACENCY_TOLERANCE) return false
-    return Math.min(room.x + room.width, r.x + r.width) - Math.max(room.x, r.x) > 0
-  })
-  return other ? { room: other, wallKey: otherWallKey } : null
 }
 
 const NEARBY_GAP_TOLERANCE = 0.6 // meters, max gap closed when a wall between rooms is removed
