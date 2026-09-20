@@ -284,14 +284,37 @@ export default function HouseViewer() {
       <Canvas camera={INITIAL_CAMERA} shadows resize={RESIZE_OPTIONS}>
         <color attach="background" args={[color.workspace]} />
 
-        <ambientLight intensity={darkMode ? 0.3 : 0.5} />
-        <directionalLight
-          position={[10, 20, 10]}
-          intensity={darkMode ? 0.7 : 1}
-          castShadow
+        {/* sky-to-ground ambient instead of a flat fill, so unlit surfaces still read as
+            "up" vs "down" the way they do outdoors */}
+        <hemisphereLight
+          color={darkMode ? '#3a4a6b' : '#cfe3f7'}
+          groundColor={darkMode ? '#15151a' : '#a89478'}
+          intensity={darkMode ? 0.35 : 0.6}
         />
 
-        <Environment preset="apartment" />
+        {/* key light: a warm high-angle sun, the only shadow-caster */}
+        <directionalLight
+          position={[14, 22, 9]}
+          intensity={darkMode ? 0.55 : 1.2}
+          color={darkMode ? '#aebbff' : '#fff3e0'}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-camera-left={-30}
+          shadow-camera-right={30}
+          shadow-camera-top={30}
+          shadow-camera-bottom={-30}
+          shadow-camera-near={1}
+          shadow-camera-far={80}
+          shadow-bias={-0.0003}
+          shadow-normalBias={0.02}
+          shadow-radius={3}
+        />
+
+        {/* fill light: cool and dim, no shadow — softens the key light's shadow side the way
+            bounced sky light would, instead of leaving it flat black */}
+        <directionalLight position={[-12, 10, -8]} intensity={darkMode ? 0.12 : 0.28} color={darkMode ? '#6d7fff' : '#dbe8ff'} />
+
+        <Environment preset="apartment" environmentIntensity={darkMode ? 0.2 : 0.35} />
 
         <Grid
           args={[100, 100]}

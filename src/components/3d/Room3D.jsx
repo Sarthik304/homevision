@@ -41,19 +41,19 @@ function SofaMesh({ width, height, depth, color }) {
 
   return (
     <group>
-      <mesh position={[0, seatH / 2, backD / 2]}>
+      <mesh position={[0, seatH / 2, backD / 2]} castShadow receiveShadow>
         <boxGeometry args={[seatW, seatH, seatD]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      <mesh position={[0, height / 2, -depth / 2 + backD / 2]}>
+      <mesh position={[0, height / 2, -depth / 2 + backD / 2]} castShadow receiveShadow>
         <boxGeometry args={[width, height, backD]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      <mesh position={[-width / 2 + armW / 2, armH / 2, 0]}>
+      <mesh position={[-width / 2 + armW / 2, armH / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[armW, armH, depth]} />
         <meshStandardMaterial color={color} />
       </mesh>
-      <mesh position={[width / 2 - armW / 2, armH / 2, 0]}>
+      <mesh position={[width / 2 - armW / 2, armH / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[armW, armH, depth]} />
         <meshStandardMaterial color={color} />
       </mesh>
@@ -106,19 +106,19 @@ function LegoBedMesh({ width, height, depth, color }) {
   return (
     <group>
       {/* base frame — full footprint, no studs (the course above just rests on it) */}
-      <mesh position={[0, courseH / 2, 0]}>
+      <mesh position={[0, courseH / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[width, courseH, depth]} />
         <meshStandardMaterial color={color} />
       </mesh>
 
       {/* headboard's lower course — no studs, the upper headboard course sits directly on it */}
-      <mesh position={[0, courseH * 1.5, (headZStart + headZEnd) / 2]}>
+      <mesh position={[0, courseH * 1.5, (headZStart + headZEnd) / 2]} castShadow receiveShadow>
         <boxGeometry args={[width, courseH, endDepth]} />
         <meshStandardMaterial color={color} />
       </mesh>
 
       {/* footboard — studded */}
-      <mesh position={[0, courseH * 1.5, (footZStart + footZEnd) / 2]}>
+      <mesh position={[0, courseH * 1.5, (footZStart + footZEnd) / 2]} castShadow receiveShadow>
         <boxGeometry args={[width, courseH, endDepth]} />
         <meshStandardMaterial color={color} />
       </mesh>
@@ -136,7 +136,7 @@ function LegoBedMesh({ width, height, depth, color }) {
       />
 
       {/* mattress plate — studded, always white regardless of the bed's chosen color */}
-      <mesh position={[0, courseH * 1.5, (mattressZStart + mattressZEnd) / 2]}>
+      <mesh position={[0, courseH * 1.5, (mattressZStart + mattressZEnd) / 2]} castShadow receiveShadow>
         <boxGeometry args={[width, courseH, mattressDepth]} />
         <meshStandardMaterial color={LEGO_BED_WHITE} />
       </mesh>
@@ -154,7 +154,7 @@ function LegoBedMesh({ width, height, depth, color }) {
       />
 
       {/* headboard's upper course — only over the head end, what makes it taller than the footboard */}
-      <mesh position={[0, courseH * 2.5, (headZStart + headZEnd) / 2]}>
+      <mesh position={[0, courseH * 2.5, (headZStart + headZEnd) / 2]} castShadow receiveShadow>
         <boxGeometry args={[width, courseH, endDepth]} />
         <meshStandardMaterial color={color} />
       </mesh>
@@ -281,7 +281,7 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
       ) : isLegoBed ? (
         <LegoBedMesh width={item.width} height={item.height} depth={item.depth} color={item.color} />
       ) : (
-        <mesh position={[0, item.height / 2, 0]}>
+        <mesh position={[0, item.height / 2, 0]} castShadow receiveShadow>
           <boxGeometry args={[item.width, item.height, item.depth]} />
           <meshStandardMaterial color={item.color} />
         </mesh>
@@ -691,6 +691,8 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
         <mesh
           key={i}
           position={[seg.x + seg.w / 2 - length / 2, seg.y + seg.h / 2, 0]}
+          castShadow
+          receiveShadow
           onClick={handleClick}
         >
           <boxGeometry args={[seg.w, seg.h, thickness]} />
@@ -772,6 +774,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
       <mesh
         position={[0, 0, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
+        receiveShadow
         onClick={(e) => {
           e.stopPropagation()
           if (!pickMode) onClick(room.id)
@@ -782,7 +785,7 @@ export default function Room3D({ room, isSelected, onClick, onSelectWall, onWall
       </mesh>
 
       {anyWalls && (
-        <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <mesh position={[0, WALL_HEIGHT, 0]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
           {polygonPoints ? <shapeGeometry args={[ceilingShape]} /> : <planeGeometry args={[width, height]} />}
           <meshStandardMaterial color={palette.ceiling} />
         </mesh>
