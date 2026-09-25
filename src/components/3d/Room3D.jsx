@@ -730,7 +730,8 @@ function WallWithOpenings({ length, position, rotation, thickness = WALL_THICKNE
   )
 }
 
-export default function Room3D({ room, rooms = [], isSelected, onClick, onSelectWall, onWallDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange, onPictureDragChange }) {
+export default function Room3D({ room, rooms = [], isSelected, onClick, onSelectWall, onWallDoubleClick, onFloorDoubleClick, pickMode, onWallColorPick, onFurnitureDragChange, onPictureDragChange }) {
+  const lastFloorClickRef = useRef(0)
   const darkMode = useHouseStore((s) => s.darkMode)
   const selectedFurnitureId = useHouseStore((s) => s.selectedFurnitureId)
   const palette = getColors(darkMode)
@@ -792,7 +793,25 @@ export default function Room3D({ room, rooms = [], isSelected, onClick, onSelect
         receiveShadow
         onClick={(e) => {
           e.stopPropagation()
-          if (!pickMode) onClick(room.id)
+          if (pickMode) return
+          onClick(room.id)
+
+          const now = performance.now()
+          if (now - lastFloorClickRef.current < DOUBLE_CLICK_MS) {
+            lastFloorClickRef.current = 0
+            // undo the room group's own position/rotation to land back in item.x/item.y's
+            // room-local, top-left-origin frame — same convention pointerToRoomLocal uses below
+            const rotationRad = ((room.rotation ?? 0) * Math.PI) / 180
+            const cos = Math.cos(rotationRad)
+            const sin = Math.sin(rotationRad)
+            const dx = e.point.x - posX
+            const dz = e.point.z - posZ
+            const localX = dx * cos + dz * sin + width / 2
+            const localY = -dx * sin + dz * cos + height / 2
+            onFloorDoubleClick(room.id, localX, localY, e.nativeEvent)
+          } else {
+            lastFloorClickRef.current = now
+          }
         }}
       >
         {polygonPoints ? <shapeGeometry args={[floorShape]} /> : <planeGeometry args={[width, height]} />}

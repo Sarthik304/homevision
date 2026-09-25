@@ -631,28 +631,24 @@ const useHouseStore = create((set) => ({
       })),
     })),
 
-  // drops a furniture preset centered in the room
-  addFurniture: (roomId, preset) =>
+  // drops a furniture preset in the room — centered by default, or centered on `at` (room-local
+  // meters, clamped inside the room) when given, e.g. where the floor was double-clicked in 3D
+  addFurniture: (roomId, preset, at) =>
     set((state) => ({
       rooms: state.rooms.map((room) => {
         if (room.id !== roomId) return room
         const { type, label, width, depth, height, color } = preset
+        const x = at
+          ? Math.min(Math.max(0, at.x - width / 2), Math.max(0, room.width - width))
+          : Math.max(0, (room.width - width) / 2)
+        const y = at
+          ? Math.min(Math.max(0, at.y - depth / 2), Math.max(0, room.height - depth))
+          : Math.max(0, (room.height - depth) / 2)
         return {
           ...room,
           furniture: [
             ...(room.furniture ?? []),
-            {
-              id: nextId(),
-              type,
-              label,
-              x: Math.max(0, (room.width - width) / 2),
-              y: Math.max(0, (room.height - depth) / 2),
-              width,
-              depth,
-              height,
-              color,
-              rotation: 0,
-            },
+            { id: nextId(), type, label, x, y, width, depth, height, color, rotation: 0 },
           ],
         }
       }),

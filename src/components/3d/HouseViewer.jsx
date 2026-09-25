@@ -9,10 +9,13 @@ import { getColors, radius } from '../../theme'
 import { eventClientXY } from '../../utils/pointerPosition'
 import DimensionInput from '../ui/DimensionInput'
 import { INTERIOR_WALL_THICKNESS, MAX_WALL_THICKNESS, MIN_WALL_THICKNESS, WALL_THICKNESS } from '../../utils/wallGeometry'
+import { FURNITURE_PRESETS } from '../../constants/furniture'
 
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
 const POPUP_HEIGHT = 460
+const FURNITURE_POPUP_WIDTH = 180
+const FURNITURE_POPUP_HEIGHT = 210
 // hoisted so Canvas's `camera` prop keeps a stable reference across renders
 const INITIAL_CAMERA = { position: [20, 20, 20], fov: 50, near: 0.1, far: 1000 }
 // debounces Canvas's resize-triggered reconnect, which was dropping OrbitControls mid-setup
@@ -142,6 +145,7 @@ const selectHouseViewerState = (s) => ({
   updateWallColor: s.updateWallColor,
   updateInteriorWall: s.updateInteriorWall,
   updateRoom: s.updateRoom,
+  addFurniture: s.addFurniture,
   addPicture: s.addPicture,
   updatePicture: s.updatePicture,
   removePicture: s.removePicture,
@@ -162,6 +166,7 @@ export default function HouseViewer() {
     updateWallColor,
     updateInteriorWall,
     updateRoom,
+    addFurniture,
     addPicture,
     updatePicture,
     removePicture,
@@ -174,6 +179,7 @@ export default function HouseViewer() {
   const color = getColors(darkMode)
   const containerRef = useRef(null)
   const [colorPicker, setColorPicker] = useState(null) // { roomId, kind, key, x, y }
+  const [furniturePicker, setFurniturePicker] = useState(null) // { roomId, atX, atY, x, y } — atX/atY are room-local meters, x/y are screen position
   const [pickMode, setPickMode] = useState(false) // eyedropper: sampling colour from another wall
   const [draggingFurniture, setDraggingFurniture] = useState(false) // disables orbit while dragging
   const [draggingPicture, setDraggingPicture] = useState(false) // disables orbit while resizing a picture
@@ -203,6 +209,31 @@ export default function HouseViewer() {
     })
   }
 
+  const closeFurniturePicker = () => setFurniturePicker(null)
+
+  // double-clicking the floor itself (not a wall/furniture item) offers to drop a furniture
+  // preset right there, the same way double-clicking a wall offers to edit it
+  const handleFloorDoubleClick = (roomId, atX, atY, nativeEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const { clientX, clientY } = eventClientXY(nativeEvent)
+    const rawX = clientX - rect.left
+    const rawY = clientY - rect.top
+    setFurniturePicker({
+      roomId,
+      atX,
+      atY,
+      x: Math.min(Math.max(8, rawX), rect.width - FURNITURE_POPUP_WIDTH - 8),
+      y: Math.min(Math.max(8, rawY), rect.height - FURNITURE_POPUP_HEIGHT - 8),
+    })
+  }
+
+  const handleAddFurniture = (preset) => {
+    if (!furniturePicker) return
+    addFurniture(furniturePicker.roomId, preset, { x: furniturePicker.atX, y: furniturePicker.atY })
+    closeFurniturePicker()
+  }
+
   const handleDeselect = () => {
     if (pickMode) {
       setPickMode(false)
@@ -210,6 +241,7 @@ export default function HouseViewer() {
     }
     selectRoom(null)
     closeColorPicker()
+    closeFurniturePicker()
   }
 
   useEffect(() => {
@@ -352,6 +384,7 @@ export default function HouseViewer() {
               onClick={selectRoom}
               onSelectWall={handleSelectWall}
               onWallDoubleClick={handleWallDoubleClick}
+              onFloorDoubleClick={handleFloorDoubleClick}
               pickMode={pickMode}
               onWallColorPick={handleWallColorPick}
               onFurnitureDragChange={setDraggingFurniture}
@@ -527,6 +560,64 @@ export default function HouseViewer() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {furniturePicker && (
+        <div
+          className="pixel-shadow"
+          style={{
+            position: 'absolute',
+            left: furniturePicker.x,
+            top: furniturePicker.y,
+            width: FURNITURE_POPUP_WIDTH,
+            background: color.bg,
+            border: `1.5px solid ${color.text}`,
+            borderRadius: radius.md,
+            '--pixel-shadow-color': color.text,
+            padding: 10,
+            zIndex: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>Add furniture</span>
+            <button
+              onClick={closeFurniturePicker}
+              aria-label="Close"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: color.muted,
+                cursor: 'pointer',
+                fontSize: 15,
+                lineHeight: 1,
+                padding: '2px 4px',
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {FURNITURE_PRESETS.map((preset) => (
+              <button
+                key={preset.type}
+                className="pixel-btn"
+                onClick={() => handleAddFurniture(preset)}
+                style={{
+                  padding: '7px 0',
+                  borderRadius: radius.sm,
+                  border: `1px solid ${color.border}`,
+                  background: color.surface,
+                  color: color.text,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                + {preset.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
