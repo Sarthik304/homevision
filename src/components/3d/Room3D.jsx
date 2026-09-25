@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Plane, Quaternion, SRGBColorSpace, Shape, TextureLoader, Vector3 } from 'three'
-import { Edges, Html } from '@react-three/drei'
+import { Edges, Html, Line } from '@react-three/drei'
 import useHouseStore from '../../store/useHouseStore'
 import { getColors, radius } from '../../theme'
 import { getLPolygon } from '../../constants/lshape'
@@ -266,6 +266,42 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
     onDragChange(false)
   }
 
+  // free-angle rotation: drag the small handle floating in front of the item and it tracks the
+  // pointer exactly, same live-mutate-then-commit approach as the position drag above. The angle
+  // math inverts this item's own [0, -rotationRad, 0] group rotation — a local point at (0, z>0),
+  // the handle's own rest position, maps to room-local (sin θ, cos θ) where θ = -rotationRad, so
+  // rotation = -atan2(dx, dz) for a pointer at room-local offset (dx, dz) from the item's center.
+  const rotateRef = useRef(null) // { deg } while actively rotating
+  const rotateHandleReach = Math.max(item.width, item.depth) / 2 + 0.3
+
+  const handleRotateStart = (e) => {
+    e.stopPropagation()
+    onRoomSelect(room.id)
+    selectFurniture(item.id)
+    e.target.setPointerCapture(e.pointerId)
+    rotateRef.current = { deg: item.rotation ?? 0 }
+    onDragChange(true)
+  }
+
+  const handleRotateMove = (e) => {
+    if (!rotateRef.current) return
+    e.stopPropagation()
+    const local = pointerToRoomLocal(e)
+    const dx = local.x - baseX
+    const dz = local.z - baseZ
+    const deg = ((-Math.atan2(dx, dz) * 180) / Math.PI % 360 + 360) % 360
+    if (groupRef.current) groupRef.current.rotation.y = -((deg * Math.PI) / 180)
+    rotateRef.current.deg = deg
+  }
+
+  const endRotate = (e) => {
+    if (!rotateRef.current) return
+    e.stopPropagation()
+    updateFurniture(room.id, item.id, { rotation: Math.round(rotateRef.current.deg * 10) / 10 })
+    rotateRef.current = null
+    onDragChange(false)
+  }
+
   return (
     <group
       ref={groupRef}
@@ -293,6 +329,29 @@ function FurnitureItem({ item, room, isSelected, highlightColor, onRoomSelect, o
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           <Edges color={highlightColor} lineWidth={2} />
         </mesh>
+      )}
+      {isSelected && (
+        <>
+          <Line
+            points={[
+              [0, item.height / 2, 0],
+              [0, item.height / 2, rotateHandleReach],
+            ]}
+            color={highlightColor}
+            lineWidth={1}
+            raycast={() => null}
+          />
+          <mesh
+            position={[0, item.height / 2, rotateHandleReach]}
+            onPointerDown={handleRotateStart}
+            onPointerMove={handleRotateMove}
+            onPointerUp={endRotate}
+            onPointerCancel={endRotate}
+          >
+            <sphereGeometry args={[0.08, 16, 16]} />
+            <meshStandardMaterial color={highlightColor} />
+          </mesh>
+        </>
       )}
       {showDimensionPopup && (
         <Html position={[0, item.height + 0.3, 0]} center>
