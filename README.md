@@ -14,7 +14,7 @@ An interactive home configurator. Design your floor plan in 2D, then walk throug
 - **New rooms spawn where you're looking** — adding a room or floor drops it at the center of your current 2D view instead of a fixed corner
 - **Interior walls** — add walls inside a room, drag their endpoints to rotate/stretch them, place doors and windows on them
 - **Boundary walls, doors & windows** — toggle any of a room's four outer walls on/off, add doors and windows with configurable width/position (and height for windows)
-- **Wall & floor color picker** — click a wall or floor to select it, double-click (or double-tap) a wall in 3D to change just that wall's color, with an eyedropper to sample a color from another wall
+- **Wall & floor color picker** — click a wall or floor to select it, double-click (or double-tap) a wall in 3D to change just that wall's color, with an eyedropper to sample a color from another wall; the same popup also lets you add, resize, reposition and remove doors and windows on that wall
 - **Furniture** — drop in beds, sofas, tables, chairs, and wardrobes from presets, drag to reposition, resize by dragging a corner, or double-click (double-tap) a piece to type its exact width/depth/height
 - **Meters or feet** — toggle the display unit from the navbar; room geometry is still stored in meters underneath
 - **Room management** — add rooms or open floor areas, rename, resize, and delete them from the sidebar (with a confirmation before deleting)

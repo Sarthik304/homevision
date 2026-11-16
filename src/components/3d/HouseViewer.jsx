@@ -13,7 +13,7 @@ import { FURNITURE_PRESETS } from '../../constants/furniture'
 
 const WALL_LABELS = { top: 'Top wall', bottom: 'Bottom wall', left: 'Left wall', right: 'Right wall' }
 const POPUP_WIDTH = 200
-const POPUP_HEIGHT = 460
+const POPUP_HEIGHT = 560
 const FURNITURE_POPUP_WIDTH = 180
 const FURNITURE_POPUP_HEIGHT = 210
 // hoisted so Canvas's `camera` prop keeps a stable reference across renders
@@ -135,6 +135,115 @@ function PictureItemRow({ item, onUpdate, onRemove, color, unit }) {
   )
 }
 
+// one door or window already cut into the wall the popup is currently open for; windows also
+// get a height (`minHeight`), doors don't
+function OpeningItemRow({ item, label, onUpdate, onRemove, minWidth, minHeight, color, unit }) {
+  const inputStyle = { width: 44, padding: '4px 6px', fontSize: 12, border: `1px solid ${color.borderInput}`, borderRadius: radius.sm, background: color.bg, color: color.text }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 5,
+        fontSize: 12,
+        background: color.surface,
+        borderRadius: radius.sm,
+        padding: '6px 8px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: color.muted, fontSize: 11 }}>W</span>
+        <DimensionInput
+          valueMeters={item.width}
+          unit={unit}
+          min={minWidth}
+          onCommit={(meters) => onUpdate(item.id, { width: meters })}
+          style={inputStyle}
+        />
+        {minHeight != null && (
+          <>
+            <span style={{ color: color.muted, fontSize: 11 }}>H</span>
+            <DimensionInput
+              valueMeters={item.height}
+              unit={unit}
+              min={minHeight}
+              onCommit={(meters) => onUpdate(item.id, { height: meters })}
+              style={inputStyle}
+            />
+          </>
+        )}
+        <button
+          onClick={() => onRemove(item.id)}
+          aria-label={`Remove ${label}`}
+          style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: color.danger, cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: color.muted, fontSize: 10 }}>Start</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={item.offset}
+          onChange={(e) => onUpdate(item.id, { offset: parseFloat(e.target.value) })}
+          style={{ flex: 1, accentColor: color.brand }}
+        />
+        <span style={{ color: color.muted, fontSize: 10 }}>End</span>
+      </div>
+    </div>
+  )
+}
+
+// "Doors" / "Windows" header with a + Add button, then a row per opening on this wall
+function OpeningSection({ title, label, items, onAdd, onUpdate, onRemove, minWidth, minHeight, color, unit }) {
+  return (
+    <>
+      <div style={{ height: 1, background: color.border, margin: '10px 0' }} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>{title}</span>
+        <button
+          className="pixel-btn"
+          onClick={onAdd}
+          style={{
+            padding: '4px 10px',
+            background: color.brand,
+            border: `1px solid ${color.brand}`,
+            borderRadius: radius.sm,
+            color: '#fff',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          + Add
+        </button>
+      </div>
+      {items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {items.map((item) => (
+            <OpeningItemRow
+              key={item.id}
+              item={item}
+              label={label}
+              onUpdate={onUpdate}
+              onRemove={onRemove}
+              minWidth={minWidth}
+              minHeight={minHeight}
+              color={color}
+              unit={unit}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 // state selector for useShallow
 const selectHouseViewerState = (s) => ({
   rooms: s.rooms,
@@ -152,6 +261,18 @@ const selectHouseViewerState = (s) => ({
   addInteriorPicture: s.addInteriorPicture,
   updateInteriorPicture: s.updateInteriorPicture,
   removeInteriorPicture: s.removeInteriorPicture,
+  addDoor: s.addDoor,
+  updateDoor: s.updateDoor,
+  removeDoor: s.removeDoor,
+  addWindow: s.addWindow,
+  updateWindow: s.updateWindow,
+  removeWindow: s.removeWindow,
+  addInteriorDoor: s.addInteriorDoor,
+  updateInteriorDoor: s.updateInteriorDoor,
+  removeInteriorDoor: s.removeInteriorDoor,
+  addInteriorWindow: s.addInteriorWindow,
+  updateInteriorWindow: s.updateInteriorWindow,
+  removeInteriorWindow: s.removeInteriorWindow,
   darkMode: s.darkMode,
   unit: s.unit,
 })
@@ -173,6 +294,18 @@ export default function HouseViewer() {
     addInteriorPicture,
     updateInteriorPicture,
     removeInteriorPicture,
+    addDoor,
+    updateDoor,
+    removeDoor,
+    addWindow,
+    updateWindow,
+    removeWindow,
+    addInteriorDoor,
+    updateInteriorDoor,
+    removeInteriorDoor,
+    addInteriorWindow,
+    updateInteriorWindow,
+    removeInteriorWindow,
     darkMode,
     unit,
   } = useHouseStore(useShallow(selectHouseViewerState))
@@ -279,6 +412,17 @@ export default function HouseViewer() {
     : colorPicker.kind === 'boundary'
       ? (activeRoom.pictures ?? []).filter((p) => p.wall === colorPicker.key)
       : (activeInteriorWall?.pictures ?? [])
+  // boundary doors/windows live on the room tagged with a `wall` key; an interior wall carries its own
+  const activeWallDoors = !activeRoom
+    ? []
+    : colorPicker.kind === 'boundary'
+      ? (activeRoom.doors ?? []).filter((d) => d.wall === colorPicker.key)
+      : (activeInteriorWall?.doors ?? [])
+  const activeWallWindows = !activeRoom
+    ? []
+    : colorPicker.kind === 'boundary'
+      ? (activeRoom.windows ?? []).filter((w) => w.wall === colorPicker.key)
+      : (activeInteriorWall?.windows ?? [])
   // boundary walls share one thickness per room (its corners miter to a single value); interior
   // walls each carry their own — see wallThickness/thickness comments in useHouseStore.js
   const activeThickness = !activeRoom
@@ -328,6 +472,44 @@ export default function HouseViewer() {
     if (!colorPicker) return
     if (colorPicker.kind === 'boundary') removePicture(colorPicker.roomId, pictureId)
     else removeInteriorPicture(colorPicker.roomId, colorPicker.key, pictureId)
+  }
+
+  const isBoundary = colorPicker?.kind === 'boundary'
+
+  const handleAddDoor = () => {
+    if (!colorPicker) return
+    if (isBoundary) addDoor(colorPicker.roomId, colorPicker.key)
+    else addInteriorDoor(colorPicker.roomId, colorPicker.key)
+  }
+
+  const handleUpdateDoor = (doorId, updates) => {
+    if (!colorPicker) return
+    if (isBoundary) updateDoor(colorPicker.roomId, doorId, updates)
+    else updateInteriorDoor(colorPicker.roomId, colorPicker.key, doorId, updates)
+  }
+
+  const handleRemoveDoor = (doorId) => {
+    if (!colorPicker) return
+    if (isBoundary) removeDoor(colorPicker.roomId, doorId)
+    else removeInteriorDoor(colorPicker.roomId, colorPicker.key, doorId)
+  }
+
+  const handleAddWindow = () => {
+    if (!colorPicker) return
+    if (isBoundary) addWindow(colorPicker.roomId, colorPicker.key)
+    else addInteriorWindow(colorPicker.roomId, colorPicker.key)
+  }
+
+  const handleUpdateWindow = (windowId, updates) => {
+    if (!colorPicker) return
+    if (isBoundary) updateWindow(colorPicker.roomId, windowId, updates)
+    else updateInteriorWindow(colorPicker.roomId, colorPicker.key, windowId, updates)
+  }
+
+  const handleRemoveWindow = (windowId) => {
+    if (!colorPicker) return
+    if (isBoundary) removeWindow(colorPicker.roomId, windowId)
+    else removeInteriorWindow(colorPicker.roomId, colorPicker.key, windowId)
   }
 
   return (
@@ -560,6 +742,31 @@ export default function HouseViewer() {
               ))}
             </div>
           )}
+
+          <OpeningSection
+            title="Doors"
+            label="door"
+            items={activeWallDoors}
+            onAdd={handleAddDoor}
+            onUpdate={handleUpdateDoor}
+            onRemove={handleRemoveDoor}
+            minWidth={0.3}
+            color={color}
+            unit={unit}
+          />
+
+          <OpeningSection
+            title="Windows"
+            label="window"
+            items={activeWallWindows}
+            onAdd={handleAddWindow}
+            onUpdate={handleUpdateWindow}
+            onRemove={handleRemoveWindow}
+            minWidth={0.2}
+            minHeight={0.2}
+            color={color}
+            unit={unit}
+          />
         </div>
       )}
 
