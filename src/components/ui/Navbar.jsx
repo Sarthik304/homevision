@@ -6,7 +6,7 @@ import useDesignsStore from '../../store/useDesignsStore'
 import AuthModal from '../auth/AuthModal'
 import DesignsPanel from '../auth/DesignsPanel'
 import OpenDesignModal from './OpenDesignModal'
-import ImportPhotoModal from './ImportPhotoModal'
+import Modal from './Modal'
 import { getColors, radius } from '../../theme'
 import { shareLinkFor } from '../../utils/shareLink'
 import { UNIT_OPTIONS } from '../../utils/units'
@@ -354,7 +354,15 @@ export default function Navbar() {
       {modal === 'auth' && <AuthModal onClose={() => setModal(null)} color={color} />}
       {modal === 'designs' && user && <DesignsPanel onClose={() => setModal(null)} color={color} />}
       {modal === 'open-design' && <OpenDesignModal onClose={() => setModal(null)} color={color} />}
-      {modal === 'import-photo' && <ImportPhotoModal onClose={() => setModal(null)} color={color} />}
+      {/* import-from-photo is paused for now — swap this back to <ImportPhotoModal /> (still in
+          ./ImportPhotoModal.jsx, backed by api/analyze-layout.js) once it's ready */}
+      {modal === 'import-photo' && (
+        <Modal title="Import from photo" onClose={() => setModal(null)} color={color} width={320}>
+          <p style={{ fontSize: 13, color: color.muted, margin: 0, textAlign: 'center' }}>
+            Work in progress — coming soon.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }
