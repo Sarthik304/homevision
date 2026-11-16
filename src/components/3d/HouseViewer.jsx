@@ -342,6 +342,36 @@ export default function HouseViewer() {
     })
   }
 
+  // the wall popup can be dragged by its header, so it can be moved off the door/window being adjusted
+  const popupRef = useRef(null)
+  const popupDragRef = useRef(null) // { startX, startY, originX, originY } while dragging
+
+  const handlePopupDragStart = (e) => {
+    if (e.target.closest('button')) return
+    popupDragRef.current = { startX: e.clientX, startY: e.clientY, originX: colorPicker.x, originY: colorPicker.y }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const handlePopupDragMove = (e) => {
+    const drag = popupDragRef.current
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!drag || !rect) return
+    const popupHeight = popupRef.current?.offsetHeight ?? POPUP_HEIGHT
+    const x = drag.originX + e.clientX - drag.startX
+    const y = drag.originY + e.clientY - drag.startY
+    setColorPicker((p) =>
+      p && {
+        ...p,
+        x: Math.min(Math.max(8, x), Math.max(8, rect.width - POPUP_WIDTH - 8)),
+        y: Math.min(Math.max(8, y), Math.max(8, rect.height - popupHeight - 8)),
+      }
+    )
+  }
+
+  const handlePopupDragEnd = () => {
+    popupDragRef.current = null
+  }
+
   const closeFurniturePicker = () => setFurniturePicker(null)
 
   // double-clicking the floor itself (not a wall/furniture item) offers to drop a furniture
@@ -617,6 +647,7 @@ export default function HouseViewer() {
 
       {colorPicker && activeRoom && (
         <div
+          ref={popupRef}
           className="pixel-shadow"
           style={{
             position: 'absolute',
@@ -634,16 +665,23 @@ export default function HouseViewer() {
           }}
         >
           <div
+            onPointerDown={handlePopupDragStart}
+            onPointerMove={handlePopupDragMove}
+            onPointerUp={handlePopupDragEnd}
+            onPointerCancel={handlePopupDragEnd}
+            title="Drag to move"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               marginBottom: 8,
               gap: 6,
+              cursor: 'move',
+              touchAction: 'none',
             }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: color.text }}>
-              {colorPicker.kind === 'boundary' ? WALL_LABELS[colorPicker.key] : 'Interior wall'}
+            <span style={{ fontSize: 12, fontWeight: 700, color: color.text, userSelect: 'none' }}>
+              ⠿ {colorPicker.kind === 'boundary' ? WALL_LABELS[colorPicker.key] : 'Interior wall'}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <button
